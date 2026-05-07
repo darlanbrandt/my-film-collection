@@ -67,8 +67,9 @@ async function getDetails(candidate, directorHint) {
   const title = detail.title || candidate.title;
   const year = detail.release_date?.slice(0, 4) || candidate.year || "";
 
-  // Fetch Oscar count from OMDB via Worker using IMDb ID
+  // Fetch Oscar count and IMDb rating from OMDB via Worker using IMDb ID
   let awards = 0;
+  let imdbRating = "";
   try {
     const imdbId = detail.imdb_id || "";
     const query = imdbId
@@ -80,9 +81,10 @@ async function getDetails(candidate, directorHint) {
       const match = omdb.Awards.match(/Won (\d+) Oscar/i);
       if (match) awards = parseInt(match[1]);
     }
+    if (omdb.imdbRating && omdb.imdbRating !== "N/A") imdbRating = omdb.imdbRating;
   } catch {}
 
-  return { title, year, genre, director: directorHint || director, country, actors, awards: String(awards), poster, plot };
+  return { title, year, genre, director: directorHint || director, country, actors, awards: String(awards), imdbRating, poster, plot };
 }
 
 function useStorage() {
@@ -158,6 +160,7 @@ function FilmCard({ film, onRemove, isUnlocked }) {
           <div style={{ padding:"10px 12px 12px" }}>
             <div style={{ fontWeight:500, fontSize:13, color:"#fff", lineHeight:1.3, marginBottom:3 }}>{film.title}</div>
             <div style={{ fontSize:11, color:"#8888aa" }}>{film.year} · {film.genre?.split(",")[0]}</div>
+            {film.imdbRating && <div style={{ fontSize:11, color:"#f5c518", marginTop:2 }}>⭐ {film.imdbRating}/10</div>}
             {film.awards > 0 && <div style={{ marginTop:6, fontSize:10, background:"#3a2a00", color:"#f5c518", borderRadius:6, display:"inline-block", padding:"2px 8px" }}>★ {film.awards} Oscar{film.awards > 1 ? "s" : ""}</div>}
           </div>
         </>
