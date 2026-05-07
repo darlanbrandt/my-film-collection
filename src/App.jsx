@@ -56,16 +56,22 @@ async function getDetails(candidate, directorHint) {
   let awards = 0;
   try {
     const imdbId = detail.imdb_id || "";
+    console.log("IMDb ID:", imdbId);
     const query = imdbId
       ? `${PROXY}/omdb?imdbId=${imdbId}`
       : `${PROXY}/omdb?title=${encodeURIComponent(title)}&year=${year}`;
     const omdbRes = await fetch(query);
     const omdb = await omdbRes.json();
+    console.log("OMDB response:", omdb);
+    console.log("Awards field:", omdb.Awards);
     if (omdb.Awards) {
       const match = omdb.Awards.match(/Won (\d+) Oscar/i);
+      console.log("Regex match:", match);
       if (match) awards = parseInt(match[1]);
     }
-  } catch {}
+  } catch (e) {
+    console.log("OMDB error:", e.message);
+  }
 
   return { title, year, genre, director: directorHint || director, country, actors, awards: String(awards), poster, plot };
 }
