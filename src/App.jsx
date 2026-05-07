@@ -49,34 +49,21 @@ async function getDetails(candidate, directorHint) {
   const country = detail.production_countries?.[0]?.name || "";
   const poster = detail.poster_path ? `${TMDB_IMG}${detail.poster_path}` : (candidate.poster_path ? `${TMDB_IMG}${candidate.poster_path}` : "");
   const plot = detail.overview || candidate.overview || "";
+  const title = detail.title || candidate.title;
+  const year = detail.release_date?.slice(0, 4) || candidate.year || "";
 
+  // Fetch Oscar count from OMDB via Worker
   let awards = 0;
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 10,
-        system: "Reply with a single integer only — the number of Academy Awards won. Just the number, nothing else.",
-        messages: [{ role: "user", content: `Oscars won by "${detail.title}" (${detail.release_date?.slice(0,4)})?` }]
-      })
-    });
-    const data = await res.json();
-    awards = parseInt(data.content?.find(b => b.type === "text")?.text?.trim()) || 0;
+    const omdbRes = await fetch(`${PROXY}/omdb?title=${encodeURIComponent(title)}&year=${year}`);
+    const omdb = await omdbRes.json();
+    if (omdb.Awards) {
+      const match = omdb.Awards.match(/Won (\d+) Oscar/i);
+      if (match) awards = parseInt(match[1]);
+    }
   } catch {}
 
-  return {
-    title: detail.title || candidate.title,
-    year: detail.release_date?.slice(0, 4) || candidate.year || "",
-    genre,
-    director: directorHint || director,
-    country,
-    actors,
-    awards: String(awards),
-    poster,
-    plot
-  };
+  return { title, year, genre, director: directorHint || director, country, actors, awards: String(awards), poster, plot };
 }
 
 function useStorage() {
