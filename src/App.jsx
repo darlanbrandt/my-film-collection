@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
-const STORAGE_KEY = "film_tracker_films";
+const APP_PASSWORD = import.meta.env.VITE_APP_PASSWORD || null
 const PROXY = "https://tmdb-proxy.darlanbrandt.workers.dev";
 const TMDB_IMG = "https://image.tmdb.org/t/p/w500";
 
@@ -49,7 +49,6 @@ async function getDetails(candidate, directorHint) {
   const poster = detail.poster_path ? `${TMDB_IMG}${detail.poster_path}` : (candidate.poster_path ? `${TMDB_IMG}${candidate.poster_path}` : "");
   const plot = detail.overview || candidate.overview || "";
 
-  // Oscar count via Claude
   let awards = 0;
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -107,7 +106,7 @@ function StatCard({ label, value }) {
   );
 }
 
-function FilmCard({ film, onRemove }) {
+function FilmCard({ film, onRemove, isUnlocked }) {
   const [flip, setFlip] = useState(false);
   return (
     <div onClick={() => setFlip(f => !f)} style={{ cursor:"pointer", borderRadius:10, overflow:"hidden", border:"1px solid #2a2a4a", background:"#1a1a2e", display:"flex", flexDirection:"column" }}>
@@ -132,7 +131,7 @@ function FilmCard({ film, onRemove }) {
           <div><span style={{ color:"#fff" }}>Genre:</span> {film.genre}</div>
           <div><span style={{ color:"#fff" }}>Cast:</span> {film.actors}</div>
           {film.plot && <div style={{ marginTop:4, lineHeight:1.5, fontSize:11 }}>{film.plot}</div>}
-          <button onClick={e => { e.stopPropagation(); onRemove(film.id); }} style={{ marginTop:"auto", fontSize:11, color:"#ff6b6b", background:"none", border:"1px solid #3a2a2a", borderRadius:6, padding:"4px 8px", cursor:"pointer", alignSelf:"flex-start" }}>Remove</button>
+          {isUnlocked && <button onClick={e => { e.stopPropagation(); onRemove(film.id); }} style={{ marginTop:"auto", fontSize:11, color:"#ff6b6b", background:"none", border:"1px solid #3a2a2a", borderRadius:6, padding:"4px 8px", cursor:"pointer", alignSelf:"flex-start" }}>Remove</button>}
         </div>
       )}
     </div>
@@ -154,7 +153,7 @@ function AddModal({ onClose, onAdd }) {
     if (!query.trim()) return;
     setLoading(true); setErr("");
     try {
-      const results = await searchFilms(query, yearQuery, directorQuery, setStatus);
+      const results = await searchFilms(query.trim().slice(0,100), yearQuery.trim(), directorQuery.trim().slice(0,100), setStatus);
       if (!results.length) {
         setErr("No results found. Try different search terms or fill in manually.");
         setForm(f => ({ ...f, title: query, year: yearQuery, director: directorQuery }));
@@ -304,6 +303,8 @@ export default function App() {
   const [films, saveFilms] = useStorage();
   const [tab, setTab] = useState("stats");
   const [showAdd, setShowAdd] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [isUnlocked, setIsUnlocked] = useState(!APP_PASSWORD);
   const [search, setSearch] = useState("");
   const [filterGenre, setFilterGenre] = useState("All");
   const [filterDecade, setFilterDecade] = useState("All");
@@ -312,6 +313,11 @@ export default function App() {
 
   const addFilm = film => saveFilms([...films, film]);
   const removeFilm = id => saveFilms(films.filter(f => f.id !== id));
+
+  const handleAddClick = () => {
+    if (isUnlocked) setShowAdd(true);
+    else setShowPassword(true);
+  };
 
   const allGenres = ["All", ...new Set(films.flatMap(f => f.genre?.split(",").map(g=>g.trim()).filter(Boolean)))].sort();
   const allDecades = ["All", ...new Set(films.map(f=>decadeOf(f.year)).filter(d=>d!=="Unknown"))].sort();
@@ -367,7 +373,9 @@ export default function App() {
           <div style={{ fontSize:22, fontWeight:500, color:"#fff" }}>My Film Collection</div>
           <div style={{ fontSize:13, color:"#8888aa" }}>{films.length} film{films.length!==1?"s":""} watched</div>
         </div>
-        <button onClick={()=>setShowAdd(true)} style={{ background:"#7F77DD", color:"#fff", border:"none", borderRadius:8, padding:"10px 20px", fontWeight:500, cursor:"pointer", fontSize:14 }}>+ Add film</button>
+        <button onClick={handleAddClick} style={{ background:"#7F77DD", color:"#fff", border:"none", borderRadius:8, padding:"10px 20px", fontWeight:500, cursor:"pointer", fontSize:14 }}>
+          {isUnlocked ? "+ Add film" : "🔒 Add film"}
+        </button>
       </div>
 
       <div style={{ display:"flex", gap:8, marginBottom:"1.5rem" }}>
@@ -403,12 +411,13 @@ export default function App() {
           {filtered.length===0
             ? <div style={{ textAlign:"center", padding:"3rem", color:"#666", fontSize:14 }}>{films.length===0?"No films yet. Add your first one!":"No films match your filters."}</div>
             : <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(160px, 1fr))", gap:12 }}>
-                {filtered.map(f=><FilmCard key={f.id} film={f} onRemove={removeFilm} />)}
+                {filtered.map(f=><FilmCard key={f.id} film={f} onRemove={removeFilm} isUnlocked={isUnlocked} />)}
               </div>
           }
         </>
       )}
 
+      {showPassword && <PasswordModal onSuccess={() => { setIsUnlocked(true); setShowAdd(true); }} onClose={() => setShowPassword(false)} />}
       {showAdd && <AddModal onClose={()=>setShowAdd(false)} onAdd={addFilm} />}
     </div>
   );
