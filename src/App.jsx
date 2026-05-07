@@ -52,10 +52,14 @@ async function getDetails(candidate, directorHint) {
   const title = detail.title || candidate.title;
   const year = detail.release_date?.slice(0, 4) || candidate.year || "";
 
-  // Fetch Oscar count from OMDB via Worker
+  // Fetch Oscar count from OMDB via Worker using IMDb ID
   let awards = 0;
   try {
-    const omdbRes = await fetch(`${PROXY}/omdb?title=${encodeURIComponent(title)}&year=${year}`);
+    const imdbId = detail.imdb_id || "";
+    const query = imdbId
+      ? `${PROXY}/omdb?imdbId=${imdbId}`
+      : `${PROXY}/omdb?title=${encodeURIComponent(title)}&year=${year}`;
+    const omdbRes = await fetch(query);
     const omdb = await omdbRes.json();
     if (omdb.Awards) {
       const match = omdb.Awards.match(/Won (\d+) Oscar/i);
