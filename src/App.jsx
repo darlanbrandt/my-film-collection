@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
+const STORAGE_KEY = "film_tracker_films";
 const APP_PASSWORD = import.meta.env.VITE_APP_PASSWORD || null
 const PROXY = "https://tmdb-proxy.darlanbrandt.workers.dev";
 const TMDB_IMG = "https://image.tmdb.org/t/p/w500";
@@ -96,6 +97,37 @@ function useStorage() {
 }
 
 const inp = { background:"#12122a", border:"1px solid #2a2a4a", borderRadius:6, color:"#fff", padding:"8px 10px", fontSize:13, boxSizing:"border-box" };
+
+function PasswordModal({ onSuccess, onClose }) {
+  const [value, setValue] = useState("");
+  const [err, setErr] = useState("");
+  const submit = () => {
+    if (value === APP_PASSWORD) { onSuccess(); onClose(); }
+    else { setErr("Wrong password. Try again."); setValue(""); }
+  };
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.88)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:9999 }}>
+      <div style={{ background:"#0f0f1e", border:"1px solid #2a2a4a", borderRadius:14, padding:"1.5rem", width:"min(360px, 94vw)", color:"#fff" }}>
+        <div style={{ fontSize:17, fontWeight:500, marginBottom:"0.5rem" }}>Enter password</div>
+        <div style={{ fontSize:12, color:"#8888aa", marginBottom:"1rem" }}>This action is restricted to the collection owner.</div>
+        <input
+          type="password"
+          value={value}
+          onChange={e => { setValue(e.target.value); setErr(""); }}
+          onKeyDown={e => e.key === "Enter" && submit()}
+          placeholder="Password"
+          autoFocus
+          style={{ width:"100%", boxSizing:"border-box", background:"#12122a", border:"1px solid #2a2a4a", borderRadius:6, color:"#fff", padding:"9px 12px", fontSize:13, marginBottom:8 }}
+        />
+        {err && <div style={{ fontSize:12, color:"#ff8888", marginBottom:8 }}>{err}</div>}
+        <div style={{ display:"flex", gap:8 }}>
+          <button onClick={onClose} style={{ flex:1, background:"none", border:"1px solid #2a2a4a", borderRadius:6, color:"#aaa", padding:"9px", cursor:"pointer", fontSize:13 }}>Cancel</button>
+          <button onClick={submit} style={{ flex:2, background:"#7F77DD", color:"#fff", border:"none", borderRadius:8, padding:"9px", fontWeight:500, cursor:"pointer", fontSize:13 }}>Unlock</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function StatCard({ label, value }) {
   return (
@@ -305,11 +337,6 @@ export default function App() {
   const [showAdd, setShowAdd] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isUnlocked, setIsUnlocked] = useState(!APP_PASSWORD);
-  const [search, setSearch] = useState("");
-  const [filterGenre, setFilterGenre] = useState("All");
-  const [filterDecade, setFilterDecade] = useState("All");
-  const [filterDirector, setFilterDirector] = useState("All");
-  const [filterCountry, setFilterCountry] = useState("All");
 
   const addFilm = film => saveFilms([...films, film]);
   const removeFilm = id => saveFilms(films.filter(f => f.id !== id));
@@ -325,6 +352,21 @@ export default function App() {
   const allCountries = ["All", ...new Set(films.map(f=>f.country).filter(Boolean))].sort();
 
   const filtered = films.filter(f => {
+    const q = "".toLowerCase();
+    return (!q || [f.title,f.director,f.actors,f.country,f.genre].some(v=>v?.toLowerCase().includes(q)))
+      && (true)
+      && (true)
+      && (true)
+      && (true);
+  });
+
+  const [search, setSearch] = useState("");
+  const [filterGenre, setFilterGenre] = useState("All");
+  const [filterDecade, setFilterDecade] = useState("All");
+  const [filterDirector, setFilterDirector] = useState("All");
+  const [filterCountry, setFilterCountry] = useState("All");
+
+  const filteredFilms = films.filter(f => {
     const q = search.toLowerCase();
     return (!q || [f.title,f.director,f.actors,f.country,f.genre].some(v=>v?.toLowerCase().includes(q)))
       && (filterGenre==="All" || f.genre?.toLowerCase().includes(filterGenre.toLowerCase()))
@@ -408,10 +450,10 @@ export default function App() {
             <select value={filterDirector} onChange={e=>setFilterDirector(e.target.value)} style={{ flex:"1 1 140px", ...sel }}>{allDirectors.map(d=><option key={d}>{d}</option>)}</select>
             <select value={filterCountry} onChange={e=>setFilterCountry(e.target.value)} style={{ flex:"1 1 120px", ...sel }}>{allCountries.map(c=><option key={c}>{c}</option>)}</select>
           </div>
-          {filtered.length===0
+          {filteredFilms.length===0
             ? <div style={{ textAlign:"center", padding:"3rem", color:"#666", fontSize:14 }}>{films.length===0?"No films yet. Add your first one!":"No films match your filters."}</div>
             : <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(160px, 1fr))", gap:12 }}>
-                {filtered.map(f=><FilmCard key={f.id} film={f} onRemove={removeFilm} isUnlocked={isUnlocked} />)}
+                {filteredFilms.map(f=><FilmCard key={f.id} film={f} onRemove={removeFilm} isUnlocked={isUnlocked} />)}
               </div>
           }
         </>
