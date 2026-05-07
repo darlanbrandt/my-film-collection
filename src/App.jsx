@@ -1,7 +1,22 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
-const STORAGE_KEY = "film_tracker_films";
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { hasError: false }; }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  render() {
+    if (this.state.hasError) return (
+      <div style={{ padding:"2rem", textAlign:"center", color:"#ff8888", fontFamily:"sans-serif" }}>
+        <div style={{ fontSize:32, marginBottom:8 }}>😵</div>
+        <div style={{ fontSize:16, marginBottom:4 }}>Something went wrong.</div>
+        <button onClick={() => this.setState({ hasError: false })} style={{ marginTop:12, padding:"8px 16px", background:"#7F77DD", color:"#fff", border:"none", borderRadius:8, cursor:"pointer" }}>Try again</button>
+      </div>
+    );
+    return this.props.children;
+  }
+}
+
+const STORAGE_KEY = "mfc_v1_films";
 const APP_PASSWORD = import.meta.env.VITE_APP_PASSWORD || null
 const PROXY = "https://tmdb-proxy.darlanbrandt.workers.dev";
 const TMDB_IMG = "https://image.tmdb.org/t/p/w500";
@@ -56,22 +71,16 @@ async function getDetails(candidate, directorHint) {
   let awards = 0;
   try {
     const imdbId = detail.imdb_id || "";
-    console.log("IMDb ID:", imdbId);
     const query = imdbId
       ? `${PROXY}/omdb?imdbId=${imdbId}`
       : `${PROXY}/omdb?title=${encodeURIComponent(title)}&year=${year}`;
     const omdbRes = await fetch(query);
     const omdb = await omdbRes.json();
-    console.log("OMDB response:", omdb);
-    console.log("Awards field:", omdb.Awards);
     if (omdb.Awards) {
       const match = omdb.Awards.match(/Won (\d+) Oscar/i);
-      console.log("Regex match:", match);
       if (match) awards = parseInt(match[1]);
     }
-  } catch (e) {
-    console.log("OMDB error:", e.message);
-  }
+  } catch {}
 
   return { title, year, genre, director: directorHint || director, country, actors, awards: String(awards), poster, plot };
 }
@@ -179,10 +188,13 @@ function AddModal({ onClose, onAdd }) {
   const [err, setErr] = useState("");
 
   const doSearch = async () => {
-    if (!query.trim()) return;
+    const q = query.trim().slice(0, 100);
+    const y = yearQuery.trim().slice(0, 4).replace(/\D/g, "");
+    const d = directorQuery.trim().slice(0, 100);
+    if (!q) return;
     setLoading(true); setErr("");
     try {
-      const results = await searchFilms(query.trim().slice(0,100), yearQuery.trim(), directorQuery.trim().slice(0,100), setStatus);
+      const results = await searchFilms(q, y, d, setStatus);
       if (!results.length) {
         setErr("No results found. Try different search terms or fill in manually.");
         setForm(f => ({ ...f, title: query, year: yearQuery, director: directorQuery }));
@@ -212,7 +224,8 @@ function AddModal({ onClose, onAdd }) {
   };
 
   const handleAdd = () => {
-    if (!form.title.trim()) return;
+    if (!form.title.trim()) { setErr("Title is required."); return; }
+    if (!form.year.trim() || isNaN(parseInt(form.year))) { setErr("A valid year is required."); return; }
     onAdd({ ...form, id: Date.now(), awards: Number(form.awards) || 0 });
     onClose();
   };
@@ -328,7 +341,7 @@ function decadeOf(year) {
   return `${Math.floor(y / 10) * 10}s`;
 }
 
-export default function App() {
+function AppInner() {
   const [films, saveFilms] = useStorage();
   const [tab, setTab] = useState("stats");
   const [showAdd, setShowAdd] = useState(false);
@@ -460,4 +473,8 @@ export default function App() {
       {showAdd && <AddModal onClose={()=>setShowAdd(false)} onAdd={addFilm} />}
     </div>
   );
+}
+
+export default function App() {
+  return <ErrorBoundary><AppInner /></ErrorBoundary>;
 }
