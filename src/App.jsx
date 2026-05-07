@@ -347,6 +347,11 @@ function AppInner() {
   const [showAdd, setShowAdd] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isUnlocked, setIsUnlocked] = useState(!APP_PASSWORD);
+  const [search, setSearch] = useState("");
+  const [filterGenre, setFilterGenre] = useState("All");
+  const [filterDecade, setFilterDecade] = useState("All");
+  const [filterDirector, setFilterDirector] = useState("All");
+  const [filterCountry, setFilterCountry] = useState("All");
 
   const addFilm = film => saveFilms([...films, film]);
   const removeFilm = id => saveFilms(films.filter(f => f.id !== id));
@@ -360,21 +365,6 @@ function AppInner() {
   const allDecades = ["All", ...new Set(films.map(f=>decadeOf(f.year)).filter(d=>d!=="Unknown"))].sort();
   const allDirectors = ["All", ...new Set(films.map(f=>f.director).filter(Boolean))].sort();
   const allCountries = ["All", ...new Set(films.map(f=>f.country).filter(Boolean))].sort();
-
-  const filtered = films.filter(f => {
-    const q = "".toLowerCase();
-    return (!q || [f.title,f.director,f.actors,f.country,f.genre].some(v=>v?.toLowerCase().includes(q)))
-      && (true)
-      && (true)
-      && (true)
-      && (true);
-  });
-
-  const [search, setSearch] = useState("");
-  const [filterGenre, setFilterGenre] = useState("All");
-  const [filterDecade, setFilterDecade] = useState("All");
-  const [filterDirector, setFilterDirector] = useState("All");
-  const [filterCountry, setFilterCountry] = useState("All");
 
   const filteredFilms = films.filter(f => {
     const q = search.toLowerCase();
