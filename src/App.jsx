@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { createClient } from "@supabase/supabase-js";
 
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { hasError: false }; }
@@ -16,11 +17,52 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-const STORAGE_KEY = "mfc_v1_films";
-const APP_PASSWORD = import.meta.env.VITE_APP_PASSWORD || null
+const APP_PASSWORD = import.meta.env.VITE_APP_PASSWORD || null;
 const PROXY = "https://tmdb-proxy.darlanbrandt.workers.dev";
 const TMDB_IMG = "https://image.tmdb.org/t/p/w500";
 const TMDB_BACKDROP = "https://image.tmdb.org/t/p/w1280";
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabase = SUPABASE_URL && SUPABASE_KEY ? createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+
+function rowToFilm(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    year: row.year,
+    genre: row.genre,
+    director: row.director,
+    country: row.country,
+    actors: row.actors,
+    awards: row.awards ?? 0,
+    imdbRating: row.imdb_rating,
+    poster: row.poster,
+    backdrop: row.backdrop,
+    plot: row.plot,
+    runtime: row.runtime,
+    rewatched: row.rewatched ?? false,
+    created_at: row.created_at
+  };
+}
+
+function filmToRow(film) {
+  return {
+    title: film.title,
+    year: film.year,
+    genre: film.genre,
+    director: film.director,
+    country: film.country,
+    actors: film.actors,
+    awards: Number(film.awards) || 0,
+    imdb_rating: film.imdbRating,
+    poster: film.poster,
+    backdrop: film.backdrop,
+    plot: film.plot,
+    runtime: film.runtime,
+    rewatched: film.rewatched ?? false
+  };
+}
 
 async function tmdbFetch(path, params = {}) {
   const qs = new URLSearchParams({ path, ...params }).toString();
@@ -89,21 +131,43 @@ async function getDetails(candidate, directorHint) {
   return { title, year, genre, director: directorHint || director, country, actors, awards: String(awards), imdbRating, poster, backdrop, plot, runtime };
 }
 
-function useStorage() {
+function useFilms() {
   const [films, setFilms] = useState([]);
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
     (async () => {
-      try {
-        const r = await window.storage.get(STORAGE_KEY);
-        if (r) setFilms(JSON.parse(r.value));
-      } catch {}
+      if (supabase) {
+        const { data, error } = await supabase.from("films").select("*").order("created_at", { ascending: false });
+        if (!error && data) setFilms(data.map(rowToFilm));
+      }
+      setLoading(false);
     })();
   }, []);
-  const save = async (arr) => {
-    setFilms(arr);
-    try { await window.storage.set(STORAGE_KEY, JSON.stringify(arr)); } catch {}
+
+  const addFilm = async (film) => {
+    if (supabase) {
+      const { data, error } = await supabase.from("films").insert(filmToRow(film)).select().single();
+      if (!error && data) setFilms(prev => [rowToFilm(data), ...prev]);
+    } else {
+      setFilms(prev => [{ ...film, id: Date.now() }, ...prev]);
+    }
   };
-  return [films, save];
+
+  const removeFilm = async (id) => {
+    if (supabase) await supabase.from("films").delete().eq("id", id);
+    setFilms(prev => prev.filter(f => f.id !== id));
+  };
+
+  const toggleRewatch = async (id) => {
+    const film = films.find(f => f.id === id);
+    if (!film) return;
+    const newVal = !film.rewatched;
+    if (supabase) await supabase.from("films").update({ rewatched: newVal }).eq("id", id);
+    setFilms(prev => prev.map(f => f.id === id ? { ...f, rewatched: newVal } : f));
+  };
+
+  return { films, loading, addFilm, removeFilm, toggleRewatch };
 }
 
 const inp = { background:"#12122a", border:"1px solid #2a2a4a", borderRadius:6, color:"#fff", padding:"8px 10px", fontSize:13, boxSizing:"border-box" };
@@ -112,8 +176,6 @@ function FilmDetailModal({ film, onClose, onRemove, onToggleRewatch, isUnlocked 
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.95)", zIndex:9999, overflowY:"auto" }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{ maxWidth:860, margin:"0 auto", paddingBottom:"3rem" }}>
-
-        {/* Backdrop */}
         <div style={{ position:"relative", height:320, background:"#12122a", overflow:"hidden" }}>
           {film.backdrop
             ? <img src={film.backdrop} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", opacity:0.6 }} />
@@ -122,10 +184,9 @@ function FilmDetailModal({ film, onClose, onRemove, onToggleRewatch, isUnlocked 
               : null
           }
           <div style={{ position:"absolute", inset:0, background:"linear-gradient(to bottom, transparent 40%, rgba(0,0,0,0.95) 100%)" }} />
-          <button onClick={onClose} style={{ position:"absolute", top:16, right:16, background:"rgba(0,0,0,0.6)", border:"1px solid #444", borderRadius:"50%", width:36, height:36, color:"#fff", fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", lineHeight:1 }}>×</button>
+          <button onClick={onClose} style={{ position:"absolute", top:16, right:16, background:"rgba(0,0,0,0.6)", border:"1px solid #444", borderRadius:"50%", width:36, height:36, color:"#fff", fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>×</button>
         </div>
 
-        {/* Content */}
         <div style={{ padding:"0 1.5rem", marginTop:-80, position:"relative" }}>
           <div style={{ display:"flex", gap:20, alignItems:"flex-end", marginBottom:"1.5rem" }}>
             {film.poster && (
@@ -144,7 +205,6 @@ function FilmDetailModal({ film, onClose, onRemove, onToggleRewatch, isUnlocked 
             </div>
           </div>
 
-          {/* Ratings row */}
           <div style={{ display:"flex", gap:16, marginBottom:"1.5rem", flexWrap:"wrap" }}>
             {film.imdbRating && (
               <div style={{ background:"#1a1a2e", borderRadius:8, padding:"10px 16px", border:"1px solid #2a2a4a", textAlign:"center" }}>
@@ -166,7 +226,6 @@ function FilmDetailModal({ film, onClose, onRemove, onToggleRewatch, isUnlocked 
             )}
           </div>
 
-          {/* Plot */}
           {film.plot && (
             <div style={{ marginBottom:"1.5rem" }}>
               <div style={{ fontSize:12, color:"#8888aa", textTransform:"uppercase", letterSpacing:1, marginBottom:6 }}>Plot</div>
@@ -174,7 +233,6 @@ function FilmDetailModal({ film, onClose, onRemove, onToggleRewatch, isUnlocked 
             </div>
           )}
 
-          {/* Director & Cast */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:"1.5rem" }}>
             {film.director && (
               <div>
@@ -190,7 +248,6 @@ function FilmDetailModal({ film, onClose, onRemove, onToggleRewatch, isUnlocked 
             )}
           </div>
 
-          {/* Actions */}
           {isUnlocked && (
             <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
               <button onClick={() => onToggleRewatch(film.id)} style={{ fontSize:13, color:"#4ade80", background:"none", border:"1px solid #1a3a2a", borderRadius:8, padding:"8px 16px", cursor:"pointer" }}>
@@ -219,15 +276,7 @@ function PasswordModal({ onSuccess, onClose }) {
       <div style={{ background:"#0f0f1e", border:"1px solid #2a2a4a", borderRadius:14, padding:"1.5rem", width:"min(360px, 94vw)", color:"#fff" }}>
         <div style={{ fontSize:17, fontWeight:500, marginBottom:"0.5rem" }}>Enter password</div>
         <div style={{ fontSize:12, color:"#8888aa", marginBottom:"1rem" }}>This action is restricted to the collection owner.</div>
-        <input
-          type="password"
-          value={value}
-          onChange={e => { setValue(e.target.value); setErr(""); }}
-          onKeyDown={e => e.key === "Enter" && submit()}
-          placeholder="Password"
-          autoFocus
-          style={{ width:"100%", boxSizing:"border-box", background:"#12122a", border:"1px solid #2a2a4a", borderRadius:6, color:"#fff", padding:"9px 12px", fontSize:13, marginBottom:8 }}
-        />
+        <input type="password" value={value} onChange={e => { setValue(e.target.value); setErr(""); }} onKeyDown={e => e.key==="Enter" && submit()} placeholder="Password" autoFocus style={{ width:"100%", boxSizing:"border-box", background:"#12122a", border:"1px solid #2a2a4a", borderRadius:6, color:"#fff", padding:"9px 12px", fontSize:13, marginBottom:8 }} />
         {err && <div style={{ fontSize:12, color:"#ff8888", marginBottom:8 }}>{err}</div>}
         <div style={{ display:"flex", gap:8 }}>
           <button onClick={onClose} style={{ flex:1, background:"none", border:"1px solid #2a2a4a", borderRadius:6, color:"#aaa", padding:"9px", cursor:"pointer", fontSize:13 }}>Cancel</button>
@@ -321,7 +370,7 @@ function AddModal({ onClose, onAdd }) {
   const handleAdd = () => {
     if (!form.title.trim()) { setErr("Title is required."); return; }
     if (!form.year.trim() || isNaN(parseInt(form.year))) { setErr("A valid year is required."); return; }
-    onAdd({ ...form, id: Date.now(), awards: Number(form.awards) || 0, rewatched: false });
+    onAdd({ ...form, awards: Number(form.awards) || 0, rewatched: false });
     onClose();
   };
 
@@ -440,7 +489,7 @@ function decadeOf(year) {
 }
 
 function AppInner() {
-  const [films, saveFilms] = useStorage();
+  const { films, loading, addFilm, removeFilm, toggleRewatch } = useFilms();
   const [tab, setTab] = useState("stats");
   const [showAdd, setShowAdd] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -452,10 +501,6 @@ function AppInner() {
   const [filterCountry, setFilterCountry] = useState("All");
   const [sortBy, setSortBy] = useState("dateAdded");
   const [selectedFilm, setSelectedFilm] = useState(null);
-
-  const addFilm = film => saveFilms([...films, film]);
-  const removeFilm = id => saveFilms(films.filter(f => f.id !== id));
-  const toggleRewatch = id => saveFilms(films.map(f => f.id === id ? { ...f, rewatched: !f.rewatched } : f));
 
   const handleAddClick = () => {
     if (isUnlocked) setShowAdd(true);
@@ -479,7 +524,7 @@ function AppInner() {
     if (sortBy==="year") return parseInt(b.year) - parseInt(a.year);
     if (sortBy==="imdbRating") return parseFloat(b.imdbRating||0) - parseFloat(a.imdbRating||0);
     if (sortBy==="awards") return (Number(b.awards)||0) - (Number(a.awards)||0);
-    return b.id - a.id;
+    return 0;
   });
 
   const tally = arr => arr.reduce((m,k)=>{ m[k]=(m[k]||0)+1; return m; },{});
@@ -528,8 +573,14 @@ function AppInner() {
     </div>
   );
 
+  if (loading) return (
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", minHeight:"100vh", background:"#0a0a18", color:"#8888aa", fontSize:14 }}>
+      Loading your collection...
+    </div>
+  );
+
   return (
-    <div style={{ fontFamily:"var(--font-sans)", padding:"1.5rem", maxWidth:900, margin:"0 auto", background:"#0a0a18", minHeight:"100vh", borderRadius:12 }}>
+    <div style={{ fontFamily:"'Syne', sans-serif", padding:"1.5rem", maxWidth:900, margin:"0 auto", background:"#0a0a18", minHeight:"100vh", borderRadius:12 }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1.5rem", flexWrap:"wrap", gap:12 }}>
         <div>
           <div style={{ fontSize:22, fontWeight:500, color:"#fff" }}>My Film Collection</div>
