@@ -20,6 +20,7 @@ const STORAGE_KEY = "mfc_v1_films";
 const APP_PASSWORD = import.meta.env.VITE_APP_PASSWORD || null
 const PROXY = "https://tmdb-proxy.darlanbrandt.workers.dev";
 const TMDB_IMG = "https://image.tmdb.org/t/p/w500";
+const TMDB_BACKDROP = "https://image.tmdb.org/t/p/w1280";
 
 async function tmdbFetch(path, params = {}) {
   const qs = new URLSearchParams({ path, ...params }).toString();
@@ -63,11 +64,12 @@ async function getDetails(candidate, directorHint) {
   const genre = detail.genres?.map(g => g.name).join(", ") || "";
   const country = detail.production_countries?.[0]?.name || "";
   const poster = detail.poster_path ? `${TMDB_IMG}${detail.poster_path}` : (candidate.poster_path ? `${TMDB_IMG}${candidate.poster_path}` : "");
+  const backdrop = detail.backdrop_path ? `${TMDB_BACKDROP}${detail.backdrop_path}` : "";
   const plot = detail.overview || candidate.overview || "";
   const title = detail.title || candidate.title;
   const year = detail.release_date?.slice(0, 4) || candidate.year || "";
+  const runtime = detail.runtime ? `${detail.runtime} min` : "";
 
-  // Fetch Oscar count and IMDb rating from OMDB via Worker using IMDb ID
   let awards = 0;
   let imdbRating = "";
   try {
@@ -84,7 +86,7 @@ async function getDetails(candidate, directorHint) {
     if (omdb.imdbRating && omdb.imdbRating !== "N/A") imdbRating = omdb.imdbRating;
   } catch {}
 
-  return { title, year, genre, director: directorHint || director, country, actors, awards: String(awards), imdbRating, poster, plot };
+  return { title, year, genre, director: directorHint || director, country, actors, awards: String(awards), imdbRating, poster, backdrop, plot, runtime };
 }
 
 function useStorage() {
@@ -105,6 +107,105 @@ function useStorage() {
 }
 
 const inp = { background:"#12122a", border:"1px solid #2a2a4a", borderRadius:6, color:"#fff", padding:"8px 10px", fontSize:13, boxSizing:"border-box" };
+
+function FilmDetailModal({ film, onClose, onRemove, onToggleRewatch, isUnlocked }) {
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.95)", zIndex:9999, overflowY:"auto" }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{ maxWidth:860, margin:"0 auto", paddingBottom:"3rem" }}>
+
+        {/* Backdrop */}
+        <div style={{ position:"relative", height:320, background:"#12122a", overflow:"hidden" }}>
+          {film.backdrop
+            ? <img src={film.backdrop} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", opacity:0.6 }} />
+            : film.poster
+              ? <img src={film.poster} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", filter:"blur(18px) brightness(0.4)", transform:"scale(1.1)" }} />
+              : null
+          }
+          <div style={{ position:"absolute", inset:0, background:"linear-gradient(to bottom, transparent 40%, rgba(0,0,0,0.95) 100%)" }} />
+          <button onClick={onClose} style={{ position:"absolute", top:16, right:16, background:"rgba(0,0,0,0.6)", border:"1px solid #444", borderRadius:"50%", width:36, height:36, color:"#fff", fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", lineHeight:1 }}>×</button>
+        </div>
+
+        {/* Content */}
+        <div style={{ padding:"0 1.5rem", marginTop:-80, position:"relative" }}>
+          <div style={{ display:"flex", gap:20, alignItems:"flex-end", marginBottom:"1.5rem" }}>
+            {film.poster && (
+              <img src={film.poster} alt={film.title} style={{ width:120, borderRadius:10, boxShadow:"0 8px 32px rgba(0,0,0,0.6)", flexShrink:0 }} />
+            )}
+            <div style={{ flex:1, paddingBottom:4 }}>
+              <div style={{ fontSize:24, fontWeight:600, color:"#fff", lineHeight:1.2, marginBottom:6 }}>{film.title}</div>
+              <div style={{ fontSize:13, color:"#8888aa", marginBottom:8 }}>
+                {film.year}{film.runtime ? ` · ${film.runtime}` : ""}{film.country ? ` · ${film.country}` : ""}
+              </div>
+              <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                {film.genre?.split(",").map(g => (
+                  <span key={g} style={{ fontSize:11, background:"#1a1a3a", color:"#a388ee", borderRadius:6, padding:"3px 10px", border:"1px solid #2a2a5a" }}>{g.trim()}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Ratings row */}
+          <div style={{ display:"flex", gap:16, marginBottom:"1.5rem", flexWrap:"wrap" }}>
+            {film.imdbRating && (
+              <div style={{ background:"#1a1a2e", borderRadius:8, padding:"10px 16px", border:"1px solid #2a2a4a", textAlign:"center" }}>
+                <div style={{ fontSize:11, color:"#8888aa", marginBottom:2 }}>IMDb</div>
+                <div style={{ fontSize:18, fontWeight:600, color:"#f5c518" }}>⭐ {film.imdbRating}</div>
+              </div>
+            )}
+            {film.awards > 0 && (
+              <div style={{ background:"#1a1a2e", borderRadius:8, padding:"10px 16px", border:"1px solid #2a2a4a", textAlign:"center" }}>
+                <div style={{ fontSize:11, color:"#8888aa", marginBottom:2 }}>Oscars</div>
+                <div style={{ fontSize:18, fontWeight:600, color:"#f5c518" }}>★ {film.awards}</div>
+              </div>
+            )}
+            {film.rewatched && (
+              <div style={{ background:"#1a3a2a", borderRadius:8, padding:"10px 16px", border:"1px solid #1a4a2a", textAlign:"center" }}>
+                <div style={{ fontSize:11, color:"#4ade80", marginBottom:2 }}>Status</div>
+                <div style={{ fontSize:14, fontWeight:600, color:"#4ade80" }}>↩ Rewatched</div>
+              </div>
+            )}
+          </div>
+
+          {/* Plot */}
+          {film.plot && (
+            <div style={{ marginBottom:"1.5rem" }}>
+              <div style={{ fontSize:12, color:"#8888aa", textTransform:"uppercase", letterSpacing:1, marginBottom:6 }}>Plot</div>
+              <div style={{ fontSize:14, color:"#ccc", lineHeight:1.7 }}>{film.plot}</div>
+            </div>
+          )}
+
+          {/* Director & Cast */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:"1.5rem" }}>
+            {film.director && (
+              <div>
+                <div style={{ fontSize:12, color:"#8888aa", textTransform:"uppercase", letterSpacing:1, marginBottom:6 }}>Director</div>
+                <div style={{ fontSize:14, color:"#fff" }}>{film.director}</div>
+              </div>
+            )}
+            {film.actors && (
+              <div>
+                <div style={{ fontSize:12, color:"#8888aa", textTransform:"uppercase", letterSpacing:1, marginBottom:6 }}>Cast</div>
+                <div style={{ fontSize:13, color:"#ccc", lineHeight:1.6 }}>{film.actors.split(",").map(a => a.trim()).join(" · ")}</div>
+              </div>
+            )}
+          </div>
+
+          {/* Actions */}
+          {isUnlocked && (
+            <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+              <button onClick={() => onToggleRewatch(film.id)} style={{ fontSize:13, color:"#4ade80", background:"none", border:"1px solid #1a3a2a", borderRadius:8, padding:"8px 16px", cursor:"pointer" }}>
+                {film.rewatched ? "↩ Rewatched ✓" : "Mark as rewatched"}
+              </button>
+              <button onClick={() => { onRemove(film.id); onClose(); }} style={{ fontSize:13, color:"#ff6b6b", background:"none", border:"1px solid #3a2a2a", borderRadius:8, padding:"8px 16px", cursor:"pointer" }}>
+                Remove from collection
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function PasswordModal({ onSuccess, onClose }) {
   const [value, setValue] = useState("");
@@ -146,35 +247,26 @@ function StatCard({ label, value }) {
   );
 }
 
-function FilmCard({ film, onRemove, isUnlocked }) {
-  const [flip, setFlip] = useState(false);
+function FilmCard({ film, onSelect }) {
   return (
-    <div onClick={() => setFlip(f => !f)} style={{ cursor:"pointer", borderRadius:10, overflow:"hidden", border:"1px solid #2a2a4a", background:"#1a1a2e", display:"flex", flexDirection:"column" }}>
-      {!flip ? (
-        <>
-          <div style={{ height:210, background:"#12122a", overflow:"hidden", display:"flex", alignItems:"center", justifyContent:"center" }}>
-            {film.poster && film.poster !== "N/A"
-              ? <img src={film.poster} alt={film.title} style={{ width:"100%", height:"100%", objectFit:"cover" }} onError={e => e.target.style.display="none"} />
-              : <span style={{ fontSize:36, opacity:.4 }}>🎬</span>}
-          </div>
-          <div style={{ padding:"10px 12px 12px" }}>
-            <div style={{ fontWeight:500, fontSize:13, color:"#fff", lineHeight:1.3, marginBottom:3 }}>{film.title}</div>
-            <div style={{ fontSize:11, color:"#8888aa" }}>{film.year} · {film.genre?.split(",")[0]}</div>
-            {film.imdbRating && <div style={{ fontSize:11, color:"#f5c518", marginTop:2 }}>⭐ {film.imdbRating}/10</div>}
-            {film.awards > 0 && <div style={{ marginTop:6, fontSize:10, background:"#3a2a00", color:"#f5c518", borderRadius:6, display:"inline-block", padding:"2px 8px" }}>★ {film.awards} Oscar{film.awards > 1 ? "s" : ""}</div>}
-          </div>
-        </>
-      ) : (
-        <div style={{ padding:12, fontSize:12, color:"#aaa", display:"flex", flexDirection:"column", gap:6, minHeight:250 }}>
-          <div style={{ fontWeight:500, fontSize:13, color:"#fff", marginBottom:4 }}>{film.title} ({film.year})</div>
-          <div><span style={{ color:"#fff" }}>Director:</span> {film.director}</div>
-          <div><span style={{ color:"#fff" }}>Country:</span> {film.country}</div>
-          <div><span style={{ color:"#fff" }}>Genre:</span> {film.genre}</div>
-          <div><span style={{ color:"#fff" }}>Cast:</span> {film.actors}</div>
-          {film.plot && <div style={{ marginTop:4, lineHeight:1.5, fontSize:11 }}>{film.plot}</div>}
-          {isUnlocked && <button onClick={e => { e.stopPropagation(); onRemove(film.id); }} style={{ marginTop:"auto", fontSize:11, color:"#ff6b6b", background:"none", border:"1px solid #3a2a2a", borderRadius:6, padding:"4px 8px", cursor:"pointer", alignSelf:"flex-start" }}>Remove</button>}
-        </div>
-      )}
+    <div onClick={() => onSelect(film)} style={{ cursor:"pointer", borderRadius:10, overflow:"hidden", border:"1px solid #2a2a4a", background:"#1a1a2e", display:"flex", flexDirection:"column", transition:"transform 0.15s, border-color 0.15s" }}
+      onMouseEnter={e => { e.currentTarget.style.transform="translateY(-3px)"; e.currentTarget.style.borderColor="#7F77DD"; }}
+      onMouseLeave={e => { e.currentTarget.style.transform="translateY(0)"; e.currentTarget.style.borderColor="#2a2a4a"; }}
+    >
+      <div style={{ height:210, background:"#12122a", overflow:"hidden", display:"flex", alignItems:"center", justifyContent:"center", position:"relative" }}>
+        {film.poster && film.poster !== "N/A"
+          ? <img src={film.poster} alt={film.title} style={{ width:"100%", height:"100%", objectFit:"cover" }} onError={e => e.target.style.display="none"} />
+          : <span style={{ fontSize:36, opacity:.4 }}>🎬</span>}
+        {film.rewatched && (
+          <div style={{ position:"absolute", top:8, right:8, background:"#1a3a2a", color:"#4ade80", fontSize:10, borderRadius:6, padding:"2px 7px" }}>↩ Rewatched</div>
+        )}
+      </div>
+      <div style={{ padding:"10px 12px 12px" }}>
+        <div style={{ fontWeight:500, fontSize:13, color:"#fff", lineHeight:1.3, marginBottom:3 }}>{film.title}</div>
+        <div style={{ fontSize:11, color:"#8888aa" }}>{film.year} · {film.genre?.split(",")[0]}</div>
+        {film.imdbRating && <div style={{ fontSize:11, color:"#f5c518", marginTop:2 }}>⭐ {film.imdbRating}/10</div>}
+        {film.awards > 0 && <div style={{ marginTop:6, fontSize:10, background:"#3a2a00", color:"#f5c518", borderRadius:6, display:"inline-block", padding:"2px 8px" }}>★ {film.awards} Oscar{film.awards > 1 ? "s" : ""}</div>}
+      </div>
     </div>
   );
 }
@@ -187,7 +279,7 @@ function AddModal({ onClose, onAdd }) {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
   const [candidates, setCandidates] = useState([]);
-  const [form, setForm] = useState({ title:"", year:"", genre:"", director:"", country:"", actors:"", awards:"", poster:"", plot:"" });
+  const [form, setForm] = useState({ title:"", year:"", genre:"", director:"", country:"", actors:"", awards:"", imdbRating:"", poster:"", backdrop:"", plot:"", runtime:"" });
   const [err, setErr] = useState("");
 
   const doSearch = async () => {
@@ -229,7 +321,7 @@ function AddModal({ onClose, onAdd }) {
   const handleAdd = () => {
     if (!form.title.trim()) { setErr("Title is required."); return; }
     if (!form.year.trim() || isNaN(parseInt(form.year))) { setErr("A valid year is required."); return; }
-    onAdd({ ...form, id: Date.now(), awards: Number(form.awards) || 0 });
+    onAdd({ ...form, id: Date.now(), awards: Number(form.awards) || 0, rewatched: false });
     onClose();
   };
 
@@ -301,7 +393,7 @@ function AddModal({ onClose, onAdd }) {
         {step==="edit" && (
           <>
             <div style={{ fontSize:12, color:"#8888aa", marginBottom:"0.75rem", lineHeight:1.5 }}>
-              Review all fields before saving. Oscar count is estimated — double-check if needed.
+              Review all fields before saving. Oscar count and IMDb rating are fetched automatically.
             </div>
             {err && <div style={{ fontSize:12, color:"#ff8888", marginBottom:8 }}>{err}</div>}
             <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
@@ -326,6 +418,9 @@ function AddModal({ onClose, onAdd }) {
                 <label style={{ fontSize:11, color:"#8888aa", display:"block", marginBottom:3 }}>Plot</label>
                 <textarea value={form.plot} onChange={e => setForm(f => ({ ...f, plot: e.target.value }))} rows={3} style={{ width:"100%", ...inp, resize:"vertical" }} />
               </div>
+              {form.imdbRating && (
+                <div style={{ fontSize:12, color:"#8888aa" }}>IMDb rating: <span style={{ color:"#f5c518" }}>⭐ {form.imdbRating}/10</span></div>
+              )}
               <div style={{ display:"flex", gap:8 }}>
                 <button onClick={() => setStep("confirm")} style={{ flex:1, background:"none", border:"1px solid #2a2a4a", borderRadius:6, color:"#aaa", padding:"10px", cursor:"pointer", fontSize:13 }}>Back</button>
                 <button onClick={handleAdd} style={{ flex:2, background:"#7F77DD", color:"#fff", border:"none", borderRadius:8, padding:"10px", fontWeight:500, cursor:"pointer", fontSize:14 }}>Add to collection</button>
@@ -355,9 +450,12 @@ function AppInner() {
   const [filterDecade, setFilterDecade] = useState("All");
   const [filterDirector, setFilterDirector] = useState("All");
   const [filterCountry, setFilterCountry] = useState("All");
+  const [sortBy, setSortBy] = useState("dateAdded");
+  const [selectedFilm, setSelectedFilm] = useState(null);
 
   const addFilm = film => saveFilms([...films, film]);
   const removeFilm = id => saveFilms(films.filter(f => f.id !== id));
+  const toggleRewatch = id => saveFilms(films.map(f => f.id === id ? { ...f, rewatched: !f.rewatched } : f));
 
   const handleAddClick = () => {
     if (isUnlocked) setShowAdd(true);
@@ -376,6 +474,12 @@ function AppInner() {
       && (filterDecade==="All" || decadeOf(f.year)===filterDecade)
       && (filterDirector==="All" || f.director===filterDirector)
       && (filterCountry==="All" || f.country===filterCountry);
+  }).sort((a, b) => {
+    if (sortBy==="title") return a.title.localeCompare(b.title);
+    if (sortBy==="year") return parseInt(b.year) - parseInt(a.year);
+    if (sortBy==="imdbRating") return parseFloat(b.imdbRating||0) - parseFloat(a.imdbRating||0);
+    if (sortBy==="awards") return (Number(b.awards)||0) - (Number(a.awards)||0);
+    return b.id - a.id;
   });
 
   const tally = arr => arr.reduce((m,k)=>{ m[k]=(m[k]||0)+1; return m; },{});
@@ -390,6 +494,19 @@ function AppInner() {
   const topDirector = byDirector[0]?.name || "-";
   const topDecade = [...byDecade].sort((a,b)=>b.films-a.films)[0]?.name || "-";
   const totalOscars = films.reduce((s,f)=>s+(Number(f.awards)||0),0);
+  const ratedFilms = films.filter(f => f.imdbRating);
+  const avgRating = ratedFilms.length
+    ? (ratedFilms.reduce((s,f) => s + parseFloat(f.imdbRating), 0) / ratedFilms.length).toFixed(1)
+    : "-";
+  const topForeignCountry = (() => {
+    const counts = {};
+    films.forEach(f => {
+      if (f.country && f.country !== "United States" && f.country !== "USA") {
+        counts[f.country] = (counts[f.country]||0)+1;
+      }
+    });
+    return Object.entries(counts).sort((a,b)=>b[1]-a[1])[0]?.[0] || "-";
+  })();
 
   const sel = { background:"#12122a", border:"1px solid #2a2a4a", borderRadius:6, color:"#fff", padding:"8px 10px", fontSize:13 };
   const tabBtn = t => ({ padding:"8px 20px", border:"none", borderRadius:8, cursor:"pointer", fontWeight:500, fontSize:13, background:tab===t?"#7F77DD":"#1a1a2e", color:tab===t?"#fff":"#8888aa" });
@@ -433,9 +550,11 @@ function AppInner() {
           <div style={{ display:"flex", gap:12, marginBottom:"1.5rem", flexWrap:"wrap" }}>
             <StatCard label="Total films" value={films.length} />
             <StatCard label="Total Oscars" value={totalOscars} />
+            <StatCard label="Avg IMDb rating" value={avgRating === "NaN" ? "-" : avgRating} />
             <StatCard label="Top genre" value={topGenre} />
             <StatCard label="Top director" value={topDirector} />
             <StatCard label="Fav decade" value={topDecade} />
+            <StatCard label="Top foreign country" value={topForeignCountry} />
           </div>
           <ChartBlock title="Films by decade" data={byDecade} color="#7F77DD" />
           <ChartBlock title="Films by genre" data={byGenre} color="#1D9E75" />
@@ -446,22 +565,41 @@ function AppInner() {
 
       {tab==="collection" && (
         <>
-          <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:"1rem" }}>
+          <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:"0.75rem" }}>
             <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search films, directors, actors..." style={{ flex:"1 1 200px", minWidth:180, ...sel }} />
             <select value={filterGenre} onChange={e=>setFilterGenre(e.target.value)} style={{ flex:"1 1 120px", ...sel }}>{allGenres.map(g=><option key={g}>{g}</option>)}</select>
             <select value={filterDecade} onChange={e=>setFilterDecade(e.target.value)} style={{ flex:"1 1 100px", ...sel }}>{allDecades.map(d=><option key={d}>{d}</option>)}</select>
             <select value={filterDirector} onChange={e=>setFilterDirector(e.target.value)} style={{ flex:"1 1 140px", ...sel }}>{allDirectors.map(d=><option key={d}>{d}</option>)}</select>
             <select value={filterCountry} onChange={e=>setFilterCountry(e.target.value)} style={{ flex:"1 1 120px", ...sel }}>{allCountries.map(c=><option key={c}>{c}</option>)}</select>
           </div>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:"1rem" }}>
+            <span style={{ fontSize:12, color:"#8888aa" }}>Sort by:</span>
+            <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{ ...sel }}>
+              <option value="dateAdded">Date added</option>
+              <option value="title">Title</option>
+              <option value="year">Year</option>
+              <option value="imdbRating">IMDb rating</option>
+              <option value="awards">Oscar wins</option>
+            </select>
+          </div>
           {filteredFilms.length===0
             ? <div style={{ textAlign:"center", padding:"3rem", color:"#666", fontSize:14 }}>{films.length===0?"No films yet. Add your first one!":"No films match your filters."}</div>
             : <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(160px, 1fr))", gap:12 }}>
-                {filteredFilms.map(f=><FilmCard key={f.id} film={f} onRemove={removeFilm} isUnlocked={isUnlocked} />)}
+                {filteredFilms.map(f=><FilmCard key={f.id} film={f} onSelect={setSelectedFilm} />)}
               </div>
           }
         </>
       )}
 
+      {selectedFilm && (
+        <FilmDetailModal
+          film={selectedFilm}
+          onClose={() => setSelectedFilm(null)}
+          onRemove={removeFilm}
+          onToggleRewatch={id => { toggleRewatch(id); setSelectedFilm(f => ({ ...f, rewatched: !f.rewatched })); }}
+          isUnlocked={isUnlocked}
+        />
+      )}
       {showPassword && <PasswordModal onSuccess={() => { setIsUnlocked(true); setShowAdd(true); }} onClose={() => setShowPassword(false)} />}
       {showAdd && <AddModal onClose={()=>setShowAdd(false)} onAdd={addFilm} />}
     </div>
