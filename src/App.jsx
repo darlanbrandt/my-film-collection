@@ -213,42 +213,51 @@ function Fade({children}){
 }
 
 // ─── Theme Toggle ─────────────────────────────────────────────────────────────
-function ThemeToggle({themeId,onChange}){
+function ThemeToggle({ themeId, onChange }) {
   const t = useT();
-  const[open,setOpen]=useState(false);
-  const ref=useRef(null);
-  useEffect(()=>{
-    const h=(e)=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};
-    document.addEventListener("mousedown",h);
-    return()=>document.removeEventListener("mousedown",h);
-  },[]);
-  const cur=THEMES[themeId];
-  return(
-    <div ref={ref} style={{position:"relative"}}>
-      <button onClick={()=>setOpen(o=>!o)} style={{background:t.bgSecondary,border:`1px solid ${t.border}`,borderRadius:8,padding:"8px 12px",cursor:"pointer",color:t.textSecondary,fontSize:13,display:"flex",alignItems:"center",gap:6}}>
-        <span>{cur.mode==="dark"?"🌙":"☀️"}</span>
-        <span style={{width:10,height:10,borderRadius:"50%",background:t.accent,display:"inline-block",flexShrink:0}}/>
-        <span style={{fontSize:10}}>▾</span>
-      </button>
-      {open&&(
-        <Fade>
-          <div style={{position:"absolute",right:0,top:"calc(100% + 8px)",background:t.bgModal,border:`1px solid ${t.border}`,borderRadius:12,padding:"1rem",zIndex:10001,boxShadow:"0 8px 32px rgba(0,0,0,0.3)",minWidth:220}}>
-            <div style={{fontSize:11,color:t.textMuted,textTransform:"uppercase",letterSpacing:1,marginBottom:10}}>Appearance</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-              {Object.values(THEMES).map(th=>(
-                <button key={th.id} onClick={()=>{onChange(th.id);setOpen(false);}} style={{background:th.id===themeId?t.accent:t.bgSecondary,border:`1px solid ${th.id===themeId?t.accent:t.border}`,borderRadius:8,padding:"10px 8px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:5,color:th.id===themeId?"#fff":t.textSecondary,fontSize:12,transition:"all 0.15s"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:5}}>
-                    <span>{th.mode==="dark"?"🌙":"☀️"}</span>
-                    <span style={{width:10,height:10,borderRadius:"50%",background:th.accent,display:"inline-block",border:"1px solid rgba(255,255,255,0.3)"}}/>
-                  </div>
-                  <span style={{fontSize:11}}>{th.label}</span>
-                </button>
-              ))}
-            </div>
-            <div style={{marginTop:10,fontSize:11,color:t.textMuted,textAlign:"center"}}>More themes coming in v2.0</div>
-          </div>
-        </Fade>
-      )}
+  const cur = THEMES[themeId];
+  const toggleMode = () => onChange(`${cur.mode === "dark" ? "light" : "dark"}-${cur.hue}`);
+  const toggleHue  = () => onChange(`${cur.mode}-${cur.hue === "violet" ? "blue" : "violet"}`);
+
+  const Switch = ({ checked, onToggle, iconOff, iconOn, title }) => (
+    <button
+      onClick={onToggle}
+      title={title}
+      style={{
+        position: "relative", width: 44, height: 24, borderRadius: 12,
+        border: `1px solid ${t.border}`, cursor: "pointer", flexShrink: 0,
+        padding: 0, background: checked ? t.accent : t.bgSecondary,
+        transition: "background 0.2s, border-color 0.2s",
+      }}
+    >
+      <span style={{
+        position: "absolute", top: 2, left: checked ? 21 : 2,
+        width: 18, height: 18, borderRadius: "50%", background: "#fff",
+        transition: "left 0.2s", display: "flex", alignItems: "center",
+        justifyContent: "center", fontSize: 10, lineHeight: 1,
+        boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+      }}>
+        {checked ? iconOn : iconOff}
+      </span>
+    </button>
+  );
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <Switch
+        checked={cur.mode === "dark"}
+        onToggle={toggleMode}
+        iconOff="☀️"
+        iconOn="🌙"
+        title={cur.mode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+      />
+      <Switch
+        checked={cur.hue === "violet"}
+        onToggle={toggleHue}
+        iconOff="🔵"
+        iconOn="🟣"
+        title={cur.hue === "violet" ? "Switch to blue" : "Switch to violet"}
+      />
     </div>
   );
 }
@@ -397,18 +406,14 @@ function ShareCard({film,onClose}){
       }
       const tY=PY+PH+70;ctx.textAlign="center";
       ctx.font="bold 64px sans-serif";ctx.fillStyle="#ffffff";
-      let title=film.title;
-      const maxW=W-120;
+      let title=film.title;const maxW=W-120;
       while(ctx.measureText(title+"…").width>maxW&&title.length>0)title=title.slice(0,-1);
       if(title!==film.title)title+="…";
       ctx.fillText(title,W/2,tY);
       const meta=[film.year,film.genre?.split(",")[0]].filter(Boolean).join(" · ");
       ctx.font="36px sans-serif";ctx.fillStyle="rgba(255,255,255,0.55)";ctx.fillText(meta,W/2,tY+72);
       let eY=0;
-      if(film.imdbRating){
-        ctx.font="bold 42px sans-serif";ctx.fillStyle="#f5c518";
-        ctx.fillText(`⭐ ${film.imdbRating} / 10  IMDb`,W/2,tY+152);eY=60;
-      }
+      if(film.imdbRating){ctx.font="bold 42px sans-serif";ctx.fillStyle="#f5c518";ctx.fillText(`⭐ ${film.imdbRating} / 10  IMDb`,W/2,tY+152);eY=60;}
       if(film.awards>0){ctx.font="36px sans-serif";ctx.fillStyle="#f5c518";ctx.fillText(`★ ${film.awards} Oscar${film.awards>1?"s":""}`,W/2,tY+152+eY);}
       ctx.strokeStyle="rgba(255,255,255,0.15)";ctx.lineWidth=1;ctx.beginPath();
       ctx.moveTo(W/2-120,H-160);ctx.lineTo(W/2+120,H-160);ctx.stroke();
@@ -425,15 +430,15 @@ function ShareCard({film,onClose}){
 
   return(
     <Fade>
-      <div style={{position:"fixed",inset:0,background:t.overlayBgDeep,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",zIndex:10000,padding:"1rem"}} onClick={onClose}>
+      <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",zIndex:10000,padding:"1rem"}} onClick={onClose}>
         <div onClick={e=>e.stopPropagation()} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:16,maxWidth:320,width:"100%"}}>
-          {generating&&<div style={{color:t.textSecondary,fontSize:14,padding:"2rem"}}>Generating share card...</div>}
+          {generating&&<div style={{color:"rgba(255,255,255,0.5)",fontSize:14,padding:"2rem"}}>Generating share card...</div>}
           <canvas ref={canvasRef} style={{width:"100%",borderRadius:12,boxShadow:"0 8px 40px rgba(0,0,0,0.8)",display:ready?"block":"none"}}/>
           <div style={{display:"flex",gap:8,width:"100%"}}>
-            <button onClick={onClose} style={{flex:1,background:"none",border:`1px solid ${t.border}`,borderRadius:8,color:t.textSecondary,padding:"10px",cursor:"pointer",fontSize:13}}>Close</button>
-            {ready&&<button onClick={download} style={{flex:2,background:t.accent,color:t.accentText,border:"none",borderRadius:8,padding:"10px",fontWeight:500,cursor:"pointer",fontSize:14}}>{isIOS?"🖼 Open image":"⬇ Download for Stories"}</button>}
+            <button onClick={onClose} style={{flex:1,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:8,color:"rgba(255,255,255,0.75)",padding:"10px",cursor:"pointer",fontSize:13}}>Close</button>
+            {ready&&<button onClick={download} style={{flex:2,background:t.accent,color:"#fff",border:"none",borderRadius:8,padding:"10px",fontWeight:500,cursor:"pointer",fontSize:14}}>{isIOS?"🖼 Open image":"⬇ Download for Stories"}</button>}
           </div>
-          {ready&&<div style={{fontSize:11,color:t.textMuted,textAlign:"center"}}>{isIOS?"Long-press the image to save it, then share to Stories":"Save and share it to your Instagram Story"}</div>}
+          {ready&&<div style={{fontSize:11,color:"rgba(255,255,255,0.4)",textAlign:"center"}}>{isIOS?"Long-press the image to save it, then share to Stories":"Save and share it to your Instagram Story"}</div>}
         </div>
       </div>
     </Fade>
@@ -446,12 +451,12 @@ function FilmDetailModal({film,onClose,onRemove,onToggleRewatch,onMoveToWatched,
   const[confirmRemove,setConfirmRemove]=useState(false);
   return(
     <Fade>
-      <div style={{position:"fixed",inset:0,background:t.overlayBgDark,zIndex:9999,overflowY:"auto"}} onClick={onClose}>
-        <div onClick={e=>e.stopPropagation()} style={{maxWidth:860,margin:"0 auto",paddingBottom:"3rem"}}>
-          <div style={{position:"relative",height:320,background:t.bgTertiary,overflow:"hidden"}}>
+      <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.97)",zIndex:9999,overflowY:"auto"}} onClick={onClose}>
+        <div onClick={e=>e.stopPropagation()} style={{maxWidth:860,margin:"0 auto",paddingBottom:"3rem",background:"#0d0d1a",minHeight:"100%"}}>
+          <div style={{position:"relative",height:320,background:"#12122a",overflow:"hidden"}}>
             {film.backdrop?<img src={film.backdrop} alt="" style={{width:"100%",height:"100%",objectFit:"cover",opacity:0.6}}/>
               :film.poster?<img src={film.poster} alt="" style={{width:"100%",height:"100%",objectFit:"cover",filter:"blur(18px) brightness(0.4)",transform:"scale(1.1)"}}/>:null}
-            <div style={{position:"absolute",inset:0,background:"linear-gradient(to bottom, transparent 40%, rgba(0,0,0,0.95) 100%)"}}/>
+            <div style={{position:"absolute",inset:0,background:"linear-gradient(to bottom, transparent 40%, #0d0d1a 100%)"}}/>
             <button onClick={onClose} style={{position:"absolute",top:16,right:16,background:"rgba(0,0,0,0.6)",border:"1px solid #444",borderRadius:"50%",width:36,height:36,color:"#fff",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
           </div>
           <div style={{padding:"0 1.5rem",marginTop:-80,position:"relative"}}>
@@ -459,21 +464,21 @@ function FilmDetailModal({film,onClose,onRemove,onToggleRewatch,onMoveToWatched,
               {film.poster&&<img src={film.poster} alt={film.title} style={{width:120,borderRadius:10,boxShadow:"0 8px 32px rgba(0,0,0,0.6)",flexShrink:0}}/>}
               <div style={{flex:1,paddingBottom:4}}>
                 <div style={{fontSize:24,fontWeight:600,color:"#fff",lineHeight:1.2,marginBottom:6}}>{film.title}</div>
-                <div style={{fontSize:13,color:"rgba(255,255,255,0.55)",marginBottom:8}}>{film.year}{film.runtime?` · ${film.runtime}`:""}{film.country?` · ${film.country}`:""}</div>
+                <div style={{fontSize:13,color:"rgba(255,255,255,0.5)",marginBottom:8}}>{film.year}{film.runtime?` · ${film.runtime}`:""}{film.country?` · ${film.country}`:""}</div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                  {film.genre?.split(",").map(g=><span key={g} style={{fontSize:11,background:"rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.8)",borderRadius:6,padding:"3px 10px",border:"1px solid rgba(255,255,255,0.2)"}}>{g.trim()}</span>)}
+                  {film.genre?.split(",").map(g=><span key={g} style={{fontSize:11,background:"rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.75)",borderRadius:6,padding:"3px 10px",border:"1px solid rgba(255,255,255,0.15)"}}>{g.trim()}</span>)}
                 </div>
               </div>
             </div>
             <div style={{display:"flex",gap:16,marginBottom:"1.5rem",flexWrap:"wrap"}}>
-              {film.imdbRating&&<div style={{background:"rgba(0,0,0,0.4)",borderRadius:8,padding:"10px 16px",border:"1px solid rgba(255,255,255,0.1)",textAlign:"center"}}><div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginBottom:2}}>IMDb</div><div style={{fontSize:18,fontWeight:600,color:"#f5c518"}}>⭐ {film.imdbRating}</div></div>}
-              {film.awards>0&&<div style={{background:"rgba(0,0,0,0.4)",borderRadius:8,padding:"10px 16px",border:"1px solid rgba(255,255,255,0.1)",textAlign:"center"}}><div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginBottom:2}}>Oscars</div><div style={{fontSize:18,fontWeight:600,color:"#f5c518"}}>★ {film.awards}</div></div>}
-              {film.rewatched&&<div style={{background:"rgba(0,100,50,0.3)",borderRadius:8,padding:"10px 16px",border:"1px solid rgba(74,222,128,0.3)",textAlign:"center"}}><div style={{fontSize:11,color:"rgba(74,222,128,0.7)",marginBottom:2}}>Status</div><div style={{fontSize:14,fontWeight:600,color:"#4ade80"}}>↩ Rewatched</div></div>}
+              {film.imdbRating&&<div style={{background:"rgba(255,255,255,0.05)",borderRadius:8,padding:"10px 16px",border:"1px solid rgba(255,255,255,0.1)",textAlign:"center"}}><div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginBottom:2}}>IMDb</div><div style={{fontSize:18,fontWeight:600,color:"#f5c518"}}>⭐ {film.imdbRating}</div></div>}
+              {film.awards>0&&<div style={{background:"rgba(255,255,255,0.05)",borderRadius:8,padding:"10px 16px",border:"1px solid rgba(255,255,255,0.1)",textAlign:"center"}}><div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginBottom:2}}>Oscars</div><div style={{fontSize:18,fontWeight:600,color:"#f5c518"}}>★ {film.awards}</div></div>}
+              {film.rewatched&&<div style={{background:"rgba(0,100,50,0.3)",borderRadius:8,padding:"10px 16px",border:"1px solid rgba(74,222,128,0.3)",textAlign:"center"}}><div style={{fontSize:11,color:"rgba(74,222,128,0.6)",marginBottom:2}}>Status</div><div style={{fontSize:14,fontWeight:600,color:"#4ade80"}}>↩ Rewatched</div></div>}
             </div>
-            {film.plot&&<div style={{marginBottom:"1.5rem"}}><div style={{fontSize:12,color:"rgba(255,255,255,0.4)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Plot</div><div style={{fontSize:14,color:"rgba(255,255,255,0.8)",lineHeight:1.7}}>{film.plot}</div></div>}
+            {film.plot&&<div style={{marginBottom:"1.5rem"}}><div style={{fontSize:12,color:"rgba(255,255,255,0.35)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Plot</div><div style={{fontSize:14,color:"rgba(255,255,255,0.75)",lineHeight:1.7}}>{film.plot}</div></div>}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:"1.5rem"}}>
-              {film.director&&<div><div style={{fontSize:12,color:"rgba(255,255,255,0.4)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Director</div><div style={{fontSize:14,color:"#fff"}}>{film.director}</div></div>}
-              {film.actors&&<div><div style={{fontSize:12,color:"rgba(255,255,255,0.4)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Cast</div><div style={{fontSize:13,color:"rgba(255,255,255,0.7)",lineHeight:1.6}}>{film.actors.split(",").map(a=>a.trim()).join(" · ")}</div></div>}
+              {film.director&&<div><div style={{fontSize:12,color:"rgba(255,255,255,0.35)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Director</div><div style={{fontSize:14,color:"#fff"}}>{film.director}</div></div>}
+              {film.actors&&<div><div style={{fontSize:12,color:"rgba(255,255,255,0.35)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Cast</div><div style={{fontSize:13,color:"rgba(255,255,255,0.7)",lineHeight:1.6}}>{film.actors.split(",").map(a=>a.trim()).join(" · ")}</div></div>}
             </div>
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
               {isUnlocked&&(
@@ -548,7 +553,6 @@ function AddModal({onClose,onAdd,onUpdate,existingFilms,editFilm}){
     poster:editFilm.poster||"",backdrop:editFilm.backdrop||"",plot:editFilm.plot||"",runtime:editFilm.runtime||""
   }:{title:"",year:"",genre:"",director:"",country:"",actors:"",awards:"",imdbRating:"",imdbId:"",poster:"",backdrop:"",plot:"",runtime:""});
   const[err,setErr]=useState("");
-
   const inp={background:t.bgTertiary,border:`1px solid ${t.border}`,borderRadius:6,color:t.textPrimary,padding:"8px 10px",fontSize:13,boxSizing:"border-box"};
 
   const doSearch=async()=>{
@@ -595,7 +599,6 @@ function AddModal({onClose,onAdd,onUpdate,existingFilms,editFilm}){
             <div style={{fontSize:17,fontWeight:500}}>{isEdit?`Edit — ${editFilm.title}`:step==="search"?"Add a film":step==="confirm"?"Select the correct film":"Review details"}</div>
             <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",fontSize:22,color:t.textMuted}}>×</button>
           </div>
-
           {step==="search"&&(
             <>
               <div style={{fontSize:12,color:t.textSecondary,marginBottom:"0.75rem",lineHeight:1.6}}>Add a year or director to narrow results.</div>
@@ -615,7 +618,6 @@ function AddModal({onClose,onAdd,onUpdate,existingFilms,editFilm}){
               {err&&<div style={{fontSize:12,color:t.red,marginTop:8}}>{err}</div>}
             </>
           )}
-
           {step==="confirm"&&(
             <>
               <div style={{fontSize:12,color:t.textSecondary,marginBottom:"1rem"}}>Select the correct film below.</div>
@@ -638,7 +640,6 @@ function AddModal({onClose,onAdd,onUpdate,existingFilms,editFilm}){
               </div>
             </>
           )}
-
           {step==="edit"&&(
             <>
               <div style={{fontSize:12,color:t.textSecondary,marginBottom:"0.75rem",lineHeight:1.5}}>{isEdit?"Update any field and save.":"Review all fields before saving."}</div>
@@ -678,6 +679,11 @@ function AppInner(){
   const[themeId,setThemeId]=useState(()=>{try{return localStorage.getItem("mfc_theme")||"dark-violet";}catch{return"dark-violet";}});
   useEffect(()=>{try{localStorage.setItem("mfc_theme",themeId);}catch{}},[themeId]);
   const theme=THEMES[themeId]||THEMES["dark-violet"];
+  useEffect(()=>{
+    document.body.style.background=theme.bgPrimary;
+    document.documentElement.style.background=theme.bgPrimary;
+    return()=>{document.body.style.background="";document.documentElement.style.background="";};
+  },[theme.bgPrimary]);
 
   const{films,loading,addFilm,updateFilm,removeFilm,toggleRewatch}=useFilms();
   const[tab,setTab]=useState("watched");
@@ -794,43 +800,34 @@ function AppInner(){
     <ThemeContext.Provider value={theme}>
       <div style={{fontFamily:"'Syne', sans-serif",padding:"1rem",maxWidth:900,margin:"0 auto",background:t.bgPrimary,minHeight:"100vh",scrollbarGutter:"stable"}}>
 
-        {/* ── Header ── */}
-        <header style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.5rem",gap:12,padding:"0.5rem 0",borderBottom:`1px solid ${t.border}`,paddingBottom:"1rem"}}>
-          {/* Left — unlock */}
+        {/* Header */}
+        <header style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,padding:"0.5rem 0 1rem",borderBottom:`1px solid ${t.border}`,marginBottom:"1.5rem"}}>
           <div style={{flex:1,display:"flex",justifyContent:"flex-start"}}>
             {!isUnlocked
-              ?<button onClick={()=>setShowPassword(true)} style={{background:t.bgSecondary,color:t.textSecondary,border:`1px solid ${t.border}`,borderRadius:8,padding:"8px 14px",fontWeight:500,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",gap:6}}>
-                🔒 <span>Unlock</span>
-              </button>
-              :<div style={{fontSize:12,color:t.green,display:"flex",alignItems:"center",gap:4}}>
-                <span>✓</span><span>Unlocked</span>
-              </div>
+              ?<button onClick={()=>setShowPassword(true)} style={{background:t.bgSecondary,color:t.textSecondary,border:`1px solid ${t.border}`,borderRadius:8,padding:"8px 14px",fontWeight:500,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",gap:6}}>🔒 Unlock</button>
+              :<div style={{fontSize:12,color:t.green,display:"flex",alignItems:"center",gap:4}}>✓ Unlocked</div>
             }
           </div>
-          {/* Center — title */}
           <div style={{flex:2,textAlign:"center"}}>
             <div style={{fontSize:20,fontWeight:600,color:t.textPrimary,letterSpacing:"-0.3px"}}>My Film Collection</div>
             <div style={{fontSize:12,color:t.textSecondary,marginTop:2}}>{watchedFilms.length} watched · {watchlistFilms.length} on watchlist</div>
           </div>
-          {/* Right — theme toggle */}
           <div style={{flex:1,display:"flex",justifyContent:"flex-end"}}>
             <ThemeToggle themeId={themeId} onChange={setThemeId}/>
           </div>
         </header>
 
-        {/* ── Tabs + Add button ── */}
+        {/* Tabs + Add */}
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.5rem",flexWrap:"wrap",gap:8}}>
           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
             {tabBtn("stats","Stats",0)}
             {tabBtn("watched","Watched",watchedFilms.length)}
             {tabBtn("watchlist","Watchlist",watchlistFilms.length)}
           </div>
-          <button onClick={handleAddClick} style={{background:t.accent,color:t.accentText,border:"none",borderRadius:8,padding:"9px 18px",fontWeight:500,cursor:"pointer",fontSize:14}}>
-            + Add film
-          </button>
+          <button onClick={handleAddClick} style={{background:t.accent,color:t.accentText,border:"none",borderRadius:8,padding:"9px 18px",fontWeight:500,cursor:"pointer",fontSize:14}}>+ Add film</button>
         </div>
 
-        {/* ── Stats tab ── */}
+        {/* Stats */}
         {tab==="stats"&&(
           <>
             <div style={{display:"flex",gap:10,marginBottom:"1.5rem",flexWrap:"wrap"}}>
@@ -852,7 +849,7 @@ function AppInner(){
           </>
         )}
 
-        {/* ── Watched / Watchlist tabs ── */}
+        {/* Watched / Watchlist */}
         {(tab==="watched"||tab==="watchlist")&&(
           <>
             <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:"0.75rem"}}>
@@ -880,11 +877,10 @@ function AppInner(){
               </button>
               <span style={{fontSize:12,color:t.textSecondary,marginLeft:"auto"}}>{filtered.length} film{filtered.length!==1?"s":""}</span>
               <div style={{display:"flex",gap:4}}>
-                <button onClick={()=>setViewMode("grid")} title="Grid view" style={{background:viewMode==="grid"?t.accent:t.bgSecondary,border:`1px solid ${t.border}`,borderRadius:6,padding:"5px 9px",cursor:"pointer",color:viewMode==="grid"?t.accentText:t.textSecondary,fontSize:14,lineHeight:1}}>⊞</button>
-                <button onClick={()=>setViewMode("list")} title="List view" style={{background:viewMode==="list"?t.accent:t.bgSecondary,border:`1px solid ${t.border}`,borderRadius:6,padding:"5px 9px",cursor:"pointer",color:viewMode==="list"?t.accentText:t.textSecondary,fontSize:14,lineHeight:1}}>☰</button>
+                <button onClick={()=>setViewMode("grid")} style={{background:viewMode==="grid"?t.accent:t.bgSecondary,border:`1px solid ${t.border}`,borderRadius:6,padding:"5px 9px",cursor:"pointer",color:viewMode==="grid"?t.accentText:t.textSecondary,fontSize:14,lineHeight:1}}>⊞</button>
+                <button onClick={()=>setViewMode("list")} style={{background:viewMode==="list"?t.accent:t.bgSecondary,border:`1px solid ${t.border}`,borderRadius:6,padding:"5px 9px",cursor:"pointer",color:viewMode==="list"?t.accentText:t.textSecondary,fontSize:14,lineHeight:1}}>☰</button>
               </div>
             </div>
-
             {filtered.length===0
               ?<EmptyState isWatchlist={tab==="watchlist"} onAdd={handleAddClick} isUnlocked={isUnlocked}/>
               :<div style={{scrollbarGutter:"stable"}}>
@@ -908,7 +904,7 @@ function AppInner(){
           </>
         )}
 
-        {/* ── Modals ── */}
+        {/* Modals */}
         {selectedFilm&&(
           <FilmDetailModal
             film={selectedFilm} onClose={()=>setSelectedFilm(null)}
