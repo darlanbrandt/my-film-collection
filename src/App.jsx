@@ -668,7 +668,7 @@ function AppInner() {
     return 0;
   });
 
-  const paginated = filtered.slice(0, page * PAGE_SIZE);
+  const paginated = filtered.slice(0, page * (viewMode === "list" ? 40 : PAGE_SIZE));
   const hasMore = paginated.length < filtered.length;
 
   // Stats
