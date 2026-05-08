@@ -448,53 +448,72 @@ function ShareCard({film,onClose}){
 // ─── Film Detail Modal ────────────────────────────────────────────────────────
 function FilmDetailModal({film,onClose,onRemove,onToggleRewatch,onMoveToWatched,onEdit,onShare,isUnlocked}){
   const t=useT();
+  const isLight=t.mode==="light";
   const[confirmRemove,setConfirmRemove]=useState(false);
+
+  const backdropGradient=isLight
+    ?`linear-gradient(to bottom, rgba(255,255,255,0) 10%, ${t.bgModal} 85%)`
+    :`linear-gradient(to bottom, transparent 40%, ${t.bgModal} 100%)`;
+
   return(
     <Fade>
-      <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.97)",zIndex:9999,overflowY:"auto"}} onClick={onClose}>
-        <div onClick={e=>e.stopPropagation()} style={{maxWidth:860,margin:"0 auto",paddingBottom:"3rem",background:"#0d0d1a",minHeight:"100%"}}>
-          <div style={{position:"relative",height:320,background:"#12122a",overflow:"hidden"}}>
-            {film.backdrop?<img src={film.backdrop} alt="" style={{width:"100%",height:"100%",objectFit:"cover",opacity:0.6}}/>
-              :film.poster?<img src={film.poster} alt="" style={{width:"100%",height:"100%",objectFit:"cover",filter:"blur(18px) brightness(0.4)",transform:"scale(1.1)"}}/>:null}
-            <div style={{position:"absolute",inset:0,background:"linear-gradient(to bottom, transparent 40%, #0d0d1a 100%)"}}/>
-            <button onClick={onClose} style={{position:"absolute",top:16,right:16,background:"rgba(0,0,0,0.6)",border:"1px solid #444",borderRadius:"50%",width:36,height:36,color:"#fff",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+      <div style={{position:"fixed",inset:0,background:t.overlayBgDeep,zIndex:9999,overflowY:"auto"}} onClick={onClose}>
+        <div onClick={e=>e.stopPropagation()} style={{maxWidth:860,margin:"0 auto",paddingBottom:"3rem",background:t.bgModal,minHeight:"100%"}}>
+
+          {/* Backdrop */}
+          <div style={{position:"relative",height:320,background:t.bgTertiary,overflow:"hidden"}}>
+            {film.backdrop
+              ?<img src={film.backdrop} alt="" style={{width:"100%",height:"100%",objectFit:"cover",opacity:isLight?0.75:0.6}}/>
+              :film.poster?<img src={film.poster} alt="" style={{width:"100%",height:"100%",objectFit:"cover",filter:`blur(18px) brightness(${isLight?0.65:0.4})`,transform:"scale(1.1)"}}/>:null}
+            <div style={{position:"absolute",inset:0,background:backdropGradient}}/>
+            <button onClick={onClose} style={{position:"absolute",top:16,right:16,background:"rgba(0,0,0,0.55)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:"50%",width:36,height:36,color:"#fff",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
           </div>
+
+          {/* Content */}
           <div style={{padding:"0 1.5rem",marginTop:-80,position:"relative"}}>
             <div style={{display:"flex",gap:20,alignItems:"flex-end",marginBottom:"1.5rem"}}>
-              {film.poster&&<img src={film.poster} alt={film.title} style={{width:120,borderRadius:10,boxShadow:"0 8px 32px rgba(0,0,0,0.6)",flexShrink:0}}/>}
+              {film.poster&&<img src={film.poster} alt={film.title} style={{width:120,borderRadius:10,boxShadow:"0 8px 32px rgba(0,0,0,0.35)",flexShrink:0}}/>}
               <div style={{flex:1,paddingBottom:4}}>
-                <div style={{fontSize:24,fontWeight:600,color:"#fff",lineHeight:1.2,marginBottom:6}}>{film.title}</div>
-                <div style={{fontSize:13,color:"rgba(255,255,255,0.5)",marginBottom:8}}>{film.year}{film.runtime?` · ${film.runtime}`:""}{film.country?` · ${film.country}`:""}</div>
+                <div style={{fontSize:24,fontWeight:600,color:t.textPrimary,lineHeight:1.2,marginBottom:6}}>{film.title}</div>
+                <div style={{fontSize:13,color:t.textSecondary,marginBottom:8}}>{film.year}{film.runtime?` · ${film.runtime}`:""}{film.country?` · ${film.country}`:""}</div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                  {film.genre?.split(",").map(g=><span key={g} style={{fontSize:11,background:"rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.75)",borderRadius:6,padding:"3px 10px",border:"1px solid rgba(255,255,255,0.15)"}}>{g.trim()}</span>)}
+                  {film.genre?.split(",").map(g=><span key={g} style={{fontSize:11,background:t.tagBg,color:t.textPrimary,borderRadius:6,padding:"3px 10px",border:`1px solid ${t.tagBorder}`}}>{g.trim()}</span>)}
                 </div>
               </div>
             </div>
+
+            {/* Ratings */}
             <div style={{display:"flex",gap:16,marginBottom:"1.5rem",flexWrap:"wrap"}}>
-              {film.imdbRating&&<div style={{background:"rgba(255,255,255,0.05)",borderRadius:8,padding:"10px 16px",border:"1px solid rgba(255,255,255,0.1)",textAlign:"center"}}><div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginBottom:2}}>IMDb</div><div style={{fontSize:18,fontWeight:600,color:"#f5c518"}}>⭐ {film.imdbRating}</div></div>}
-              {film.awards>0&&<div style={{background:"rgba(255,255,255,0.05)",borderRadius:8,padding:"10px 16px",border:"1px solid rgba(255,255,255,0.1)",textAlign:"center"}}><div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginBottom:2}}>Oscars</div><div style={{fontSize:18,fontWeight:600,color:"#f5c518"}}>★ {film.awards}</div></div>}
-              {film.rewatched&&<div style={{background:"rgba(0,100,50,0.3)",borderRadius:8,padding:"10px 16px",border:"1px solid rgba(74,222,128,0.3)",textAlign:"center"}}><div style={{fontSize:11,color:"rgba(74,222,128,0.6)",marginBottom:2}}>Status</div><div style={{fontSize:14,fontWeight:600,color:"#4ade80"}}>↩ Rewatched</div></div>}
+              {film.imdbRating&&<div style={{background:t.bgSecondary,borderRadius:8,padding:"10px 16px",border:`1px solid ${t.border}`,textAlign:"center"}}><div style={{fontSize:11,color:t.textMuted,marginBottom:2}}>IMDb</div><div style={{fontSize:18,fontWeight:600,color:t.goldText}}>⭐ {film.imdbRating}</div></div>}
+              {film.awards>0&&<div style={{background:t.bgSecondary,borderRadius:8,padding:"10px 16px",border:`1px solid ${t.border}`,textAlign:"center"}}><div style={{fontSize:11,color:t.textMuted,marginBottom:2}}>Oscars</div><div style={{fontSize:18,fontWeight:600,color:t.goldText}}>★ {film.awards}</div></div>}
+              {film.rewatched&&<div style={{background:t.greenBg,borderRadius:8,padding:"10px 16px",border:`1px solid ${t.greenBorder}`,textAlign:"center"}}><div style={{fontSize:11,color:t.green,marginBottom:2}}>Status</div><div style={{fontSize:14,fontWeight:600,color:t.green}}>↩ Rewatched</div></div>}
             </div>
-            {film.plot&&<div style={{marginBottom:"1.5rem"}}><div style={{fontSize:12,color:"rgba(255,255,255,0.35)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Plot</div><div style={{fontSize:14,color:"rgba(255,255,255,0.75)",lineHeight:1.7}}>{film.plot}</div></div>}
+
+            {/* Plot */}
+            {film.plot&&<div style={{marginBottom:"1.5rem"}}><div style={{fontSize:12,color:t.textMuted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Plot</div><div style={{fontSize:14,color:t.textSecondary,lineHeight:1.7}}>{film.plot}</div></div>}
+
+            {/* Director / Cast */}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:"1.5rem"}}>
-              {film.director&&<div><div style={{fontSize:12,color:"rgba(255,255,255,0.35)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Director</div><div style={{fontSize:14,color:"#fff"}}>{film.director}</div></div>}
-              {film.actors&&<div><div style={{fontSize:12,color:"rgba(255,255,255,0.35)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Cast</div><div style={{fontSize:13,color:"rgba(255,255,255,0.7)",lineHeight:1.6}}>{film.actors.split(",").map(a=>a.trim()).join(" · ")}</div></div>}
+              {film.director&&<div><div style={{fontSize:12,color:t.textMuted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Director</div><div style={{fontSize:14,color:t.textPrimary}}>{film.director}</div></div>}
+              {film.actors&&<div><div style={{fontSize:12,color:t.textMuted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Cast</div><div style={{fontSize:13,color:t.textSecondary,lineHeight:1.6}}>{film.actors.split(",").map(a=>a.trim()).join(" · ")}</div></div>}
             </div>
+
+            {/* Actions */}
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
               {isUnlocked&&(
                 <>
-                  <button onClick={()=>{onShare(film);onClose();}} style={{fontSize:13,color:"#fff",background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:8,padding:"8px 16px",cursor:"pointer"}}>📤 Share</button>
+                  <button onClick={()=>{onShare(film);onClose();}} style={{fontSize:13,color:t.textPrimary,background:t.bgSecondary,border:`1px solid ${t.border}`,borderRadius:8,padding:"8px 16px",cursor:"pointer"}}>📤 Share</button>
                   {film.list==="watchlist"
-                    ?<button onClick={()=>{onMoveToWatched(film.id);onClose();}} style={{fontSize:13,color:"#a388ee",background:"none",border:"1px solid rgba(163,136,238,0.3)",borderRadius:8,padding:"8px 16px",cursor:"pointer"}}>✓ Move to watched</button>
-                    :<button onClick={()=>onToggleRewatch(film.id)} style={{fontSize:13,color:"#4ade80",background:"none",border:"1px solid rgba(74,222,128,0.3)",borderRadius:8,padding:"8px 16px",cursor:"pointer"}}>{film.rewatched?"↩ Rewatched ✓":"Mark as rewatched"}</button>
+                    ?<button onClick={()=>{onMoveToWatched(film.id);onClose();}} style={{fontSize:13,color:t.purple,background:"none",border:`1px solid ${t.purpleBorder}`,borderRadius:8,padding:"8px 16px",cursor:"pointer"}}>✓ Move to watched</button>
+                    :<button onClick={()=>onToggleRewatch(film.id)} style={{fontSize:13,color:t.green,background:"none",border:`1px solid ${t.greenBorder}`,borderRadius:8,padding:"8px 16px",cursor:"pointer"}}>{film.rewatched?"↩ Rewatched ✓":"Mark as rewatched"}</button>
                   }
-                  <button onClick={()=>{onEdit(film);onClose();}} style={{fontSize:13,color:"#a388ee",background:"none",border:"1px solid rgba(163,136,238,0.3)",borderRadius:8,padding:"8px 16px",cursor:"pointer"}}>✏️ Edit</button>
+                  <button onClick={()=>{onEdit(film);onClose();}} style={{fontSize:13,color:t.purple,background:"none",border:`1px solid ${t.purpleBorder}`,borderRadius:8,padding:"8px 16px",cursor:"pointer"}}>✏️ Edit</button>
                   {!confirmRemove
-                    ?<button onClick={()=>setConfirmRemove(true)} style={{fontSize:13,color:"#ff6b6b",background:"none",border:"1px solid rgba(255,107,107,0.3)",borderRadius:8,padding:"8px 16px",cursor:"pointer"}}>Remove</button>
-                    :<div style={{display:"flex",alignItems:"center",gap:8,background:"rgba(100,0,0,0.4)",border:"1px solid rgba(255,107,107,0.3)",borderRadius:8,padding:"8px 12px"}}>
-                      <span style={{fontSize:13,color:"#ff8888"}}>Remove "{film.title}"?</span>
-                      <button onClick={()=>{onRemove(film.id);onClose();}} style={{fontSize:12,color:"#fff",background:"#cc3333",border:"none",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontWeight:500}}>Yes</button>
-                      <button onClick={()=>setConfirmRemove(false)} style={{fontSize:12,color:"#aaa",background:"none",border:"1px solid #444",borderRadius:6,padding:"5px 12px",cursor:"pointer"}}>Cancel</button>
+                    ?<button onClick={()=>setConfirmRemove(true)} style={{fontSize:13,color:t.red,background:"none",border:`1px solid ${t.redBorder}`,borderRadius:8,padding:"8px 16px",cursor:"pointer"}}>Remove</button>
+                    :<div style={{display:"flex",alignItems:"center",gap:8,background:t.redBg,border:`1px solid ${t.redBorder}`,borderRadius:8,padding:"8px 12px"}}>
+                      <span style={{fontSize:13,color:t.red}}>Remove "{film.title}"?</span>
+                      <button onClick={()=>{onRemove(film.id);onClose();}} style={{fontSize:12,color:"#fff",background:t.redButton,border:"none",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontWeight:500}}>Yes</button>
+                      <button onClick={()=>setConfirmRemove(false)} style={{fontSize:12,color:t.textSecondary,background:"none",border:`1px solid ${t.border}`,borderRadius:6,padding:"5px 12px",cursor:"pointer"}}>Cancel</button>
                     </div>
                   }
                 </>
