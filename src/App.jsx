@@ -377,7 +377,7 @@ function ShareCard({ film, onClose }) {
       if (film.imdbRating) {
         ctx.font = "bold 42px sans-serif";
         ctx.fillStyle = "#f5c518";
-        ctx.fillText(`⭐ ${film.imdbRating} / 10  on IMDb`, W / 2, textY + 152);
+        ctx.fillText(`⭐ ${film.imdbRating} / 10 on IMDb`, W / 2, textY + 152);
         extraY = 60;
       }
       if (film.awards > 0) {
