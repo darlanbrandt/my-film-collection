@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { createClient } from "@supabase/supabase-js";
 
@@ -32,43 +32,22 @@ const PAGE_SIZE_LIST = 40;
 // ─── Mappers ──────────────────────────────────────────────────────────────────
 function rowToFilm(row) {
   return {
-    id: row.id,
-    title: row.title,
-    year: row.year,
-    genre: row.genre,
-    director: row.director,
-    country: row.country,
-    actors: row.actors,
-    awards: row.awards ?? 0,
-    imdbRating: row.imdb_rating,
-    imdbId: row.imdb_id,
-    poster: row.poster,
-    backdrop: row.backdrop,
-    plot: row.plot,
-    runtime: row.runtime,
-    rewatched: row.rewatched ?? false,
-    list: row.list || "watched",
-    created_at: row.created_at
+    id: row.id, title: row.title, year: row.year, genre: row.genre,
+    director: row.director, country: row.country, actors: row.actors,
+    awards: row.awards ?? 0, imdbRating: row.imdb_rating, imdbId: row.imdb_id,
+    poster: row.poster, backdrop: row.backdrop, plot: row.plot,
+    runtime: row.runtime, rewatched: row.rewatched ?? false,
+    list: row.list || "watched", created_at: row.created_at
   };
 }
 
 function filmToRow(film) {
   return {
-    title: film.title,
-    year: film.year,
-    genre: film.genre,
-    director: film.director,
-    country: film.country,
-    actors: film.actors,
-    awards: Number(film.awards) || 0,
-    imdb_rating: film.imdbRating,
-    imdb_id: film.imdbId,
-    poster: film.poster,
-    backdrop: film.backdrop,
-    plot: film.plot,
-    runtime: film.runtime,
-    rewatched: film.rewatched ?? false,
-    list: film.list || "watched"
+    title: film.title, year: film.year, genre: film.genre, director: film.director,
+    country: film.country, actors: film.actors, awards: Number(film.awards) || 0,
+    imdb_rating: film.imdbRating, imdb_id: film.imdbId, poster: film.poster,
+    backdrop: film.backdrop, plot: film.plot, runtime: film.runtime,
+    rewatched: film.rewatched ?? false, list: film.list || "watched"
   };
 }
 
@@ -90,11 +69,8 @@ async function searchFilms(query, year, director, setStatus) {
     setStatus("");
     if (d.results?.length) {
       return d.results.slice(0, 5).map(r => ({
-        tmdb_id: r.id,
-        title: r.title,
-        original_title: r.original_title,
-        year: r.release_date?.slice(0, 4) || "?",
-        overview: r.overview,
+        tmdb_id: r.id, title: r.title, original_title: r.original_title,
+        year: r.release_date?.slice(0, 4) || "?", overview: r.overview,
         poster_path: r.poster_path || null
       }));
     }
@@ -222,8 +198,7 @@ function EmptyState({ isWatchlist, onAdd, isUnlocked }) {
       <div style={{ fontSize:13, color:"#8888aa", marginBottom:20 }}>
         {isWatchlist ? "Add films you want to watch and they'll appear here." : "Start building your personal film archive."}
       </div>
-                      <button onClick={() => { onShare(film); onClose(); }} style={{ fontSize:13, color:"#fff", background:"none", border:"1px solid #2a2a4a", borderRadius:8, padding:"8px 16px", cursor:"pointer" }}>📤 Share</button>
-                {isUnlocked && (
+      {isUnlocked && (
         <button onClick={onAdd} style={{ background:"#7F77DD", color:"#fff", border:"none", borderRadius:8, padding:"10px 24px", fontWeight:500, cursor:"pointer", fontSize:14 }}>
           + Add your first film
         </button>
@@ -295,8 +270,164 @@ function FilmListRow({ film, onSelect }) {
   );
 }
 
+// ─── Share Card ───────────────────────────────────────────────────────────────
+function ShareCard({ film, onClose }) {
+  const canvasRef = useRef(null);
+  const [generating, setGenerating] = useState(true);
+  const [ready, setReady] = useState(false);
+
+  const loadImage = (src) => new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+
+  const proxyUrl = (url) => url ? `${PROXY}/image?url=${encodeURIComponent(url)}` : null;
+
+  useEffect(() => {
+    (async () => {
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext("2d");
+      const W = 1080, H = 1920;
+      canvas.width = W; canvas.height = H;
+
+      const bg = ctx.createLinearGradient(0, 0, 0, H);
+      bg.addColorStop(0, "#0a0a18");
+      bg.addColorStop(1, "#12122a");
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, W, H);
+
+      if (film.poster) {
+        try {
+          const bgImg = await loadImage(proxyUrl(film.poster));
+          ctx.save();
+          ctx.filter = "blur(40px) brightness(0.25)";
+          ctx.drawImage(bgImg, -60, -60, W + 120, H + 120);
+          ctx.restore();
+        } catch {}
+      }
+
+      const overlay = ctx.createLinearGradient(0, 0, 0, H);
+      overlay.addColorStop(0, "rgba(0,0,0,0.3)");
+      overlay.addColorStop(0.5, "rgba(0,0,0,0.1)");
+      overlay.addColorStop(1, "rgba(0,0,0,0.7)");
+      ctx.fillStyle = overlay;
+      ctx.fillRect(0, 0, W, H);
+
+      const PW = 640, PH = 960;
+      const PX = (W - PW) / 2, PY = (H - PH) / 2 - 120;
+
+      if (film.poster) {
+        try {
+          const posterImg = await loadImage(proxyUrl(film.poster));
+          const r = 24;
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(PX + r, PY);
+          ctx.lineTo(PX + PW - r, PY);
+          ctx.quadraticCurveTo(PX + PW, PY, PX + PW, PY + r);
+          ctx.lineTo(PX + PW, PY + PH - r);
+          ctx.quadraticCurveTo(PX + PW, PY + PH, PX + PW - r, PY + PH);
+          ctx.lineTo(PX + r, PY + PH);
+          ctx.quadraticCurveTo(PX, PY + PH, PX, PY + PH - r);
+          ctx.lineTo(PX, PY + r);
+          ctx.quadraticCurveTo(PX, PY, PX + r, PY);
+          ctx.closePath();
+          ctx.clip();
+          ctx.drawImage(posterImg, PX, PY, PW, PH);
+          ctx.restore();
+          ctx.save();
+          ctx.strokeStyle = "rgba(255,255,255,0.08)";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(PX + r, PY);
+          ctx.lineTo(PX + PW - r, PY);
+          ctx.quadraticCurveTo(PX + PW, PY, PX + PW, PY + r);
+          ctx.lineTo(PX + PW, PY + PH - r);
+          ctx.quadraticCurveTo(PX + PW, PY + PH, PX + PW - r, PY + PH);
+          ctx.lineTo(PX + r, PY + PH);
+          ctx.quadraticCurveTo(PX, PY + PH, PX, PY + PH - r);
+          ctx.lineTo(PX, PY + r);
+          ctx.quadraticCurveTo(PX, PY, PX + r, PY);
+          ctx.closePath();
+          ctx.stroke();
+          ctx.restore();
+        } catch {}
+      }
+
+      const textY = PY + PH + 70;
+      ctx.textAlign = "center";
+      const maxW = W - 120;
+
+      ctx.font = "bold 64px sans-serif";
+      ctx.fillStyle = "#ffffff";
+      let title = film.title;
+      while (ctx.measureText(title + "…").width > maxW && title.length > 0) title = title.slice(0, -1);
+      if (title !== film.title) title += "…";
+      ctx.fillText(title, W / 2, textY);
+
+      const meta = [film.year, film.genre?.split(",")[0]].filter(Boolean).join(" · ");
+      ctx.font = "36px sans-serif";
+      ctx.fillStyle = "rgba(255,255,255,0.55)";
+      ctx.fillText(meta, W / 2, textY + 72);
+
+      let extraY = 0;
+      if (film.imdbRating) {
+        ctx.font = "bold 42px sans-serif";
+        ctx.fillStyle = "#f5c518";
+        ctx.fillText(`⭐ ${film.imdbRating} / 10`, W / 2, textY + 152);
+        extraY = 60;
+      }
+      if (film.awards > 0) {
+        ctx.font = "36px sans-serif";
+        ctx.fillStyle = "#f5c518";
+        ctx.fillText(`★ ${film.awards} Oscar${film.awards > 1 ? "s" : ""}`, W / 2, textY + 152 + extraY);
+      }
+
+      ctx.strokeStyle = "rgba(255,255,255,0.15)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(W / 2 - 120, H - 160);
+      ctx.lineTo(W / 2 + 120, H - 160);
+      ctx.stroke();
+
+      ctx.font = "32px sans-serif";
+      ctx.fillStyle = "rgba(255,255,255,0.35)";
+      ctx.fillText("My Film Collection", W / 2, H - 110);
+
+      setGenerating(false);
+      setReady(true);
+    })();
+  }, []);
+
+  const download = () => {
+    const link = document.createElement("a");
+    link.download = `${film.title.replace(/[^a-z0-9]/gi, "_")}_share.png`;
+    link.href = canvasRef.current.toDataURL("image/png");
+    link.click();
+  };
+
+  return (
+    <Fade>
+      <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.92)", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", zIndex:10000, padding:"1rem" }} onClick={onClose}>
+        <div onClick={e => e.stopPropagation()} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:16, maxWidth:320, width:"100%" }}>
+          {generating && <div style={{ color:"#8888aa", fontSize:14, padding:"2rem" }}>Generating share card...</div>}
+          <canvas ref={canvasRef} style={{ width:"100%", borderRadius:12, boxShadow:"0 8px 40px rgba(0,0,0,0.8)", display: ready ? "block" : "none" }} />
+          <div style={{ display:"flex", gap:8, width:"100%" }}>
+            <button onClick={onClose} style={{ flex:1, background:"none", border:"1px solid #2a2a4a", borderRadius:8, color:"#aaa", padding:"10px", cursor:"pointer", fontSize:13 }}>Close</button>
+            {ready && <button onClick={download} style={{ flex:2, background:"#7F77DD", color:"#fff", border:"none", borderRadius:8, padding:"10px", fontWeight:500, cursor:"pointer", fontSize:14 }}>⬇ Download for Stories</button>}
+          </div>
+          {ready && <div style={{ fontSize:11, color:"#666", textAlign:"center" }}>Save and share it to your Instagram Story</div>}
+        </div>
+      </div>
+    </Fade>
+  );
+}
+
 // ─── Film Detail Modal ────────────────────────────────────────────────────────
-function FilmDetailModal({ film, onClose, onRemove, onToggleRewatch, onMoveToWatched, onEdit, isUnlocked, onShare }) {
+function FilmDetailModal({ film, onClose, onRemove, onToggleRewatch, onMoveToWatched, onEdit, onShare, isUnlocked }) {
   const [confirmRemove, setConfirmRemove] = useState(false);
   return (
     <Fade>
@@ -311,6 +442,7 @@ function FilmDetailModal({ film, onClose, onRemove, onToggleRewatch, onMoveToWat
             <div style={{ position:"absolute", inset:0, background:"linear-gradient(to bottom, transparent 40%, rgba(0,0,0,0.95) 100%)" }} />
             <button onClick={onClose} style={{ position:"absolute", top:16, right:16, background:"rgba(0,0,0,0.6)", border:"1px solid #444", borderRadius:"50%", width:36, height:36, color:"#fff", fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>×</button>
           </div>
+
           <div style={{ padding:"0 1.5rem", marginTop:-80, position:"relative" }}>
             <div style={{ display:"flex", gap:20, alignItems:"flex-end", marginBottom:"1.5rem" }}>
               {film.poster && <img src={film.poster} alt={film.title} style={{ width:120, borderRadius:10, boxShadow:"0 8px 32px rgba(0,0,0,0.6)", flexShrink:0 }} />}
@@ -322,33 +454,45 @@ function FilmDetailModal({ film, onClose, onRemove, onToggleRewatch, onMoveToWat
                 </div>
               </div>
             </div>
+
             <div style={{ display:"flex", gap:16, marginBottom:"1.5rem", flexWrap:"wrap" }}>
               {film.imdbRating && <div style={{ background:"#1a1a2e", borderRadius:8, padding:"10px 16px", border:"1px solid #2a2a4a", textAlign:"center" }}><div style={{ fontSize:11, color:"#8888aa", marginBottom:2 }}>IMDb</div><div style={{ fontSize:18, fontWeight:600, color:"#f5c518" }}>⭐ {film.imdbRating}</div></div>}
               {film.awards > 0 && <div style={{ background:"#1a1a2e", borderRadius:8, padding:"10px 16px", border:"1px solid #2a2a4a", textAlign:"center" }}><div style={{ fontSize:11, color:"#8888aa", marginBottom:2 }}>Oscars</div><div style={{ fontSize:18, fontWeight:600, color:"#f5c518" }}>★ {film.awards}</div></div>}
               {film.rewatched && <div style={{ background:"#1a3a2a", borderRadius:8, padding:"10px 16px", border:"1px solid #1a4a2a", textAlign:"center" }}><div style={{ fontSize:11, color:"#4ade80", marginBottom:2 }}>Status</div><div style={{ fontSize:14, fontWeight:600, color:"#4ade80" }}>↩ Rewatched</div></div>}
             </div>
-            {film.plot && <div style={{ marginBottom:"1.5rem" }}><div style={{ fontSize:12, color:"#8888aa", textTransform:"uppercase", letterSpacing:1, marginBottom:6 }}>Plot</div><div style={{ fontSize:14, color:"#ccc", lineHeight:1.7 }}>{film.plot}</div></div>}
+
+            {film.plot && (
+              <div style={{ marginBottom:"1.5rem" }}>
+                <div style={{ fontSize:12, color:"#8888aa", textTransform:"uppercase", letterSpacing:1, marginBottom:6 }}>Plot</div>
+                <div style={{ fontSize:14, color:"#ccc", lineHeight:1.7 }}>{film.plot}</div>
+              </div>
+            )}
+
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:"1.5rem" }}>
               {film.director && <div><div style={{ fontSize:12, color:"#8888aa", textTransform:"uppercase", letterSpacing:1, marginBottom:6 }}>Director</div><div style={{ fontSize:14, color:"#fff" }}>{film.director}</div></div>}
               {film.actors && <div><div style={{ fontSize:12, color:"#8888aa", textTransform:"uppercase", letterSpacing:1, marginBottom:6 }}>Cast</div><div style={{ fontSize:13, color:"#ccc", lineHeight:1.6 }}>{film.actors.split(",").map(a => a.trim()).join(" · ")}</div></div>}
             </div>
-            {isUnlocked && (
-              <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-                {film.list === "watchlist"
-                  ? <button onClick={() => { onMoveToWatched(film.id); onClose(); }} style={{ fontSize:13, color:"#a388ee", background:"none", border:"1px solid #2a2a5a", borderRadius:8, padding:"8px 16px", cursor:"pointer" }}>✓ Move to watched</button>
-                  : <button onClick={() => onToggleRewatch(film.id)} style={{ fontSize:13, color:"#4ade80", background:"none", border:"1px solid #1a3a2a", borderRadius:8, padding:"8px 16px", cursor:"pointer" }}>{film.rewatched ? "↩ Rewatched ✓" : "Mark as rewatched"}</button>
-                }
-                <button onClick={() => { onEdit(film); onClose(); }} style={{ fontSize:13, color:"#7F77DD", background:"none", border:"1px solid #2a2a4a", borderRadius:8, padding:"8px 16px", cursor:"pointer" }}>✏️ Edit</button>
-                {!confirmRemove
-                  ? <button onClick={() => setConfirmRemove(true)} style={{ fontSize:13, color:"#ff6b6b", background:"none", border:"1px solid #3a2a2a", borderRadius:8, padding:"8px 16px", cursor:"pointer" }}>Remove</button>
-                  : <div style={{ display:"flex", alignItems:"center", gap:8, background:"#1a0a0a", border:"1px solid #3a2a2a", borderRadius:8, padding:"8px 12px" }}>
-                      <span style={{ fontSize:13, color:"#ff8888" }}>Remove "{film.title}"?</span>
-                      <button onClick={() => { onRemove(film.id); onClose(); }} style={{ fontSize:12, color:"#fff", background:"#cc3333", border:"none", borderRadius:6, padding:"5px 12px", cursor:"pointer", fontWeight:500 }}>Yes</button>
-                      <button onClick={() => setConfirmRemove(false)} style={{ fontSize:12, color:"#aaa", background:"none", border:"1px solid #444", borderRadius:6, padding:"5px 12px", cursor:"pointer" }}>Cancel</button>
-                    </div>
-                }
-              </div>
-            )}
+
+            <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+              <button onClick={() => { onShare(film); onClose(); }} style={{ fontSize:13, color:"#fff", background:"none", border:"1px solid #2a2a4a", borderRadius:8, padding:"8px 16px", cursor:"pointer" }}>📤 Share</button>
+              {isUnlocked && (
+                <>
+                  {film.list === "watchlist"
+                    ? <button onClick={() => { onMoveToWatched(film.id); onClose(); }} style={{ fontSize:13, color:"#a388ee", background:"none", border:"1px solid #2a2a5a", borderRadius:8, padding:"8px 16px", cursor:"pointer" }}>✓ Move to watched</button>
+                    : <button onClick={() => onToggleRewatch(film.id)} style={{ fontSize:13, color:"#4ade80", background:"none", border:"1px solid #1a3a2a", borderRadius:8, padding:"8px 16px", cursor:"pointer" }}>{film.rewatched ? "↩ Rewatched ✓" : "Mark as rewatched"}</button>
+                  }
+                  <button onClick={() => { onEdit(film); onClose(); }} style={{ fontSize:13, color:"#7F77DD", background:"none", border:"1px solid #2a2a4a", borderRadius:8, padding:"8px 16px", cursor:"pointer" }}>✏️ Edit</button>
+                  {!confirmRemove
+                    ? <button onClick={() => setConfirmRemove(true)} style={{ fontSize:13, color:"#ff6b6b", background:"none", border:"1px solid #3a2a2a", borderRadius:8, padding:"8px 16px", cursor:"pointer" }}>Remove</button>
+                    : <div style={{ display:"flex", alignItems:"center", gap:8, background:"#1a0a0a", border:"1px solid #3a2a2a", borderRadius:8, padding:"8px 12px" }}>
+                        <span style={{ fontSize:13, color:"#ff8888" }}>Remove "{film.title}"?</span>
+                        <button onClick={() => { onRemove(film.id); onClose(); }} style={{ fontSize:12, color:"#fff", background:"#cc3333", border:"none", borderRadius:6, padding:"5px 12px", cursor:"pointer", fontWeight:500 }}>Yes</button>
+                        <button onClick={() => setConfirmRemove(false)} style={{ fontSize:12, color:"#aaa", background:"none", border:"1px solid #444", borderRadius:6, padding:"5px 12px", cursor:"pointer" }}>Cancel</button>
+                      </div>
+                  }
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -525,193 +669,6 @@ function AddModal({ onClose, onAdd, onUpdate, existingFilms, editFilm }) {
               </div>
             </>
           )}
-        </div>
-      </div>
-    </Fade>
-  );
-}
-
-// ─── Share Card ───────────────────────────────────────────────────────────────
-function ShareCard({ film, onClose }) {
-  const canvasRef = React.useRef(null);
-  const [generating, setGenerating] = useState(false);
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => { generateCard(); }, []);
-
-  const loadImage = (src) => new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = src;
-  });
-
-  const proxyUrl = (url) => {
-    if (!url) return null;
-    return `${PROXY}/image?url=${encodeURIComponent(url)}`;
-  };
-
-  const generateCard = async () => {
-    setGenerating(true);
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    const W = 1080, H = 1920;
-    canvas.width = W; canvas.height = H;
-
-    // Background — dark gradient
-    const bg = ctx.createLinearGradient(0, 0, 0, H);
-    bg.addColorStop(0, "#0a0a18");
-    bg.addColorStop(1, "#12122a");
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, W, H);
-
-    // Blurred background poster
-    if (film.poster) {
-      try {
-        const bgImg = await loadImage(proxyUrl(film.poster));
-        ctx.save();
-        ctx.filter = "blur(40px) brightness(0.25)";
-        ctx.drawImage(bgImg, -60, -60, W + 120, H + 120);
-        ctx.restore();
-      } catch {}
-    }
-
-    // Dark overlay
-    const overlay = ctx.createLinearGradient(0, 0, 0, H);
-    overlay.addColorStop(0, "rgba(0,0,0,0.3)");
-    overlay.addColorStop(0.5, "rgba(0,0,0,0.1)");
-    overlay.addColorStop(1, "rgba(0,0,0,0.7)");
-    ctx.fillStyle = overlay;
-    ctx.fillRect(0, 0, W, H);
-
-    // Poster image centered
-    const POSTER_W = 640;
-    const POSTER_H = 960;
-    const POSTER_X = (W - POSTER_W) / 2;
-    const POSTER_Y = (H - POSTER_H) / 2 - 120;
-
-    if (film.poster) {
-      try {
-        const posterImg = await loadImage(proxyUrl(film.poster));
-        // Rounded rect clip
-        const r = 24;
-        ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(POSTER_X + r, POSTER_Y);
-        ctx.lineTo(POSTER_X + POSTER_W - r, POSTER_Y);
-        ctx.quadraticCurveTo(POSTER_X + POSTER_W, POSTER_Y, POSTER_X + POSTER_W, POSTER_Y + r);
-        ctx.lineTo(POSTER_X + POSTER_W, POSTER_Y + POSTER_H - r);
-        ctx.quadraticCurveTo(POSTER_X + POSTER_W, POSTER_Y + POSTER_H, POSTER_X + POSTER_W - r, POSTER_Y + POSTER_H);
-        ctx.lineTo(POSTER_X + r, POSTER_Y + POSTER_H);
-        ctx.quadraticCurveTo(POSTER_X, POSTER_Y + POSTER_H, POSTER_X, POSTER_Y + POSTER_H - r);
-        ctx.lineTo(POSTER_X, POSTER_Y + r);
-        ctx.quadraticCurveTo(POSTER_X, POSTER_Y, POSTER_X + r, POSTER_Y);
-        ctx.closePath();
-        ctx.clip();
-        ctx.drawImage(posterImg, POSTER_X, POSTER_Y, POSTER_W, POSTER_H);
-        ctx.restore();
-
-        // Poster shadow
-        ctx.save();
-        ctx.shadowColor = "rgba(0,0,0,0.8)";
-        ctx.shadowBlur = 60;
-        ctx.shadowOffsetY = 20;
-        ctx.strokeStyle = "rgba(255,255,255,0.08)";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(POSTER_X + r, POSTER_Y);
-        ctx.lineTo(POSTER_X + POSTER_W - r, POSTER_Y);
-        ctx.quadraticCurveTo(POSTER_X + POSTER_W, POSTER_Y, POSTER_X + POSTER_W, POSTER_Y + r);
-        ctx.lineTo(POSTER_X + POSTER_W, POSTER_Y + POSTER_H - r);
-        ctx.quadraticCurveTo(POSTER_X + POSTER_W, POSTER_Y + POSTER_H, POSTER_X + POSTER_W - r, POSTER_Y + POSTER_H);
-        ctx.lineTo(POSTER_X + r, POSTER_Y + POSTER_H);
-        ctx.quadraticCurveTo(POSTER_X, POSTER_Y + POSTER_H, POSTER_X, POSTER_Y + POSTER_H - r);
-        ctx.lineTo(POSTER_X, POSTER_Y + r);
-        ctx.quadraticCurveTo(POSTER_X, POSTER_Y, POSTER_X + r, POSTER_Y);
-        ctx.closePath();
-        ctx.stroke();
-        ctx.restore();
-      } catch {}
-    }
-
-    // Text area below poster
-    const textY = POSTER_Y + POSTER_H + 60;
-
-    // Title
-    ctx.fillStyle = "#ffffff";
-    ctx.textAlign = "center";
-    ctx.font = "bold 64px sans-serif";
-    const maxWidth = W - 120;
-    let title = film.title;
-    if (ctx.measureText(title).width > maxWidth) {
-      while (ctx.measureText(title + "…").width > maxWidth && title.length > 0) title = title.slice(0, -1);
-      title += "…";
-    }
-    ctx.fillText(title, W / 2, textY);
-
-    // Year · Genre
-    const meta = [film.year, film.genre?.split(",")[0]].filter(Boolean).join(" · ");
-    ctx.font = "36px sans-serif";
-    ctx.fillStyle = "rgba(255,255,255,0.55)";
-    ctx.fillText(meta, W / 2, textY + 70);
-
-    // IMDb rating
-    if (film.imdbRating) {
-      ctx.font = "bold 40px sans-serif";
-      ctx.fillStyle = "#f5c518";
-      ctx.fillText(`⭐ ${film.imdbRating} / 10`, W / 2, textY + 150);
-    }
-
-    // Oscars
-    if (film.awards > 0) {
-      ctx.font = "34px sans-serif";
-      ctx.fillStyle = "#f5c518";
-      ctx.fillText(`★ ${film.awards} Oscar${film.awards > 1 ? "s" : ""}`, W / 2, textY + 210);
-    }
-
-    // Divider
-    ctx.strokeStyle = "rgba(255,255,255,0.15)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(W / 2 - 120, H - 160);
-    ctx.lineTo(W / 2 + 120, H - 160);
-    ctx.stroke();
-
-    // Branding
-    ctx.font = "32px sans-serif";
-    ctx.fillStyle = "rgba(255,255,255,0.35)";
-    ctx.fillText("My Film Collection", W / 2, H - 110);
-
-    setGenerating(false);
-    setReady(true);
-  };
-
-  const download = () => {
-    const canvas = canvasRef.current;
-    const link = document.createElement("a");
-    link.download = `${film.title.replace(/[^a-z0-9]/gi, "_")}_share.png`;
-    link.href = canvas.toDataURL("image/png");
-    link.click();
-  };
-
-  return (
-    <Fade>
-      <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.92)", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", zIndex:10000, padding:"1rem" }} onClick={onClose}>
-        <div onClick={e => e.stopPropagation()} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:16, maxWidth:320, width:"100%" }}>
-          <canvas ref={canvasRef} style={{ width:"100%", borderRadius:12, boxShadow:"0 8px 40px rgba(0,0,0,0.8)", display: ready ? "block" : "none" }} />
-          {!ready && (
-            <div style={{ color:"#8888aa", fontSize:14, padding:"2rem" }}>Generating share card...</div>
-          )}
-          <div style={{ display:"flex", gap:8, width:"100%" }}>
-            <button onClick={onClose} style={{ flex:1, background:"none", border:"1px solid #2a2a4a", borderRadius:8, color:"#aaa", padding:"10px", cursor:"pointer", fontSize:13 }}>Close</button>
-            {ready && (
-              <button onClick={download} style={{ flex:2, background:"#7F77DD", color:"#fff", border:"none", borderRadius:8, padding:"10px", fontWeight:500, cursor:"pointer", fontSize:14 }}>
-                ⬇ Download for Stories
-              </button>
-            )}
-          </div>
-          {ready && <div style={{ fontSize:11, color:"#666", textAlign:"center" }}>Save the image and share it to your Instagram Story</div>}
         </div>
       </div>
     </Fade>
