@@ -629,8 +629,8 @@ function AppInner() {
   const [editFilm, setEditFilm] = useState(null);
   const [viewMode, setViewMode] = useState("grid");
 
-  const [page, setPage] = useState(1);
-  useEffect(() => { setPage(1); }, [tab, search, filterGenre, filterDecade, filterDirector, filterCountry, sortBy]);
+  const [sortDir, setSortDir] = useState("desc");
+  useEffect(() => { setPage(1); }, [tab, search, filterGenre, filterDecade, filterDirector, filterCountry, sortBy, sortDir]);
 
   const requireUnlock = (action) => {
     if (isUnlocked) { action(); }
@@ -661,11 +661,12 @@ function AppInner() {
       && (filterDirector==="All" || f.director===filterDirector)
       && (filterCountry==="All" || f.country===filterCountry);
   }).sort((a, b) => {
-    if (sortBy==="title") return a.title.localeCompare(b.title);
-    if (sortBy==="year") return parseInt(b.year) - parseInt(a.year);
-    if (sortBy==="imdbRating") return parseFloat(b.imdbRating||0) - parseFloat(a.imdbRating||0);
-    if (sortBy==="awards") return (Number(b.awards)||0) - (Number(a.awards)||0);
-    return 0;
+    const dir = sortDir === "asc" ? 1 : -1;
+    if (sortBy==="title") return dir * a.title.localeCompare(b.title);
+    if (sortBy==="year") return dir * (parseInt(a.year) - parseInt(b.year));
+    if (sortBy==="imdbRating") return dir * (parseFloat(a.imdbRating||0) - parseFloat(b.imdbRating||0));
+    if (sortBy==="awards") return dir * ((Number(a.awards)||0) - (Number(b.awards)||0));
+    return dir * (a.id - b.id);
   });
 
   const paginated = filtered.slice(0, page * (viewMode === "list" ? 40 : PAGE_SIZE));
@@ -790,13 +791,21 @@ function AppInner() {
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:"1rem" }}>
             <span style={{ fontSize:12, color:"#8888aa" }}>Sort by:</span>
-            <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{ ...sel }}>
+            <select value={sortBy} onChange={e=>{ setSortBy(e.target.value); setSortDir("desc"); }} style={{ ...sel }}>
               <option value="dateAdded">Date added</option>
               <option value="title">Title</option>
               <option value="year">Year</option>
               <option value="imdbRating">IMDb rating</option>
               <option value="awards">Oscar wins</option>
             </select>
+            <button onClick={() => setSortDir(d => d === "asc" ? "desc" : "asc")} title="Toggle sort direction" style={{ background:"#1a1a2e", border:"1px solid #2a2a4a", borderRadius:6, padding:"5px 10px", cursor:"pointer", color:"#aaa", fontSize:12, whiteSpace:"nowrap" }}>
+              {sortBy === "title"
+                ? sortDir === "desc" ? "Z → A" : "A → Z"
+                : sortBy === "year"
+                  ? sortDir === "desc" ? "Newer first" : "Older first"
+                  : sortDir === "desc" ? "Highest first" : "Lowest first"
+              }
+            </button>
             <span style={{ fontSize:12, color:"#8888aa", marginLeft:"auto" }}>{filtered.length} film{filtered.length !== 1 ? "s" : ""}</span>
             <div style={{ display:"flex", gap:4 }}>
               <button onClick={() => setViewMode("grid")} title="Grid view" style={{ background: viewMode==="grid" ? "#7F77DD" : "#1a1a2e", border:"1px solid #2a2a4a", borderRadius:6, padding:"5px 9px", cursor:"pointer", color: viewMode==="grid" ? "#fff" : "#8888aa", fontSize:14, lineHeight:1 }}>⊞</button>
