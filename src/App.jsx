@@ -457,7 +457,7 @@ function FilmDetailModal({film,onClose,onRemove,onToggleRewatch,onMoveToWatched,
 
   return(
     <Fade>
-      <div style={{position:"fixed",inset:0,background:t.overlayBgDeep,zIndex:9999,overflowY:"auto"}} onClick={onClose}>
+      <div style={{position:"fixed",inset:0,background:t.bgModal,zIndex:9999,overflowY:"auto"}} onClick={onClose}>
         <div onClick={e=>e.stopPropagation()} style={{maxWidth:860,margin:"0 auto",paddingBottom:"3rem",background:t.bgModal,minHeight:"100%"}}>
 
           {/* Backdrop */}
