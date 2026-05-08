@@ -699,13 +699,14 @@ function SuggestionsModal({data,onClose,onAdd}){
   const t=useT();
   const[picks,setPicks]=useState(data.picks);
   const[loadingId,setLoadingId]=useState(null);
+  const[addToWatchlist,setAddToWatchlist]=useState(false);
 
   const handlePick=async(film)=>{
     if(loadingId) return;
     setLoadingId(film.tmdbId);
     try{
       const details=await getDetails({tmdb_id:film.tmdbId,poster_path:null,overview:""},"");
-      await onAdd({...details,awards:Number(details.awards)||0,rewatched:false,list:"watched"});
+      await onAdd({...details,awards:Number(details.awards)||0,rewatched:false,list:addToWatchlist?"watchlist":"watched"});
       setPicks(prev=>prev.filter(p=>p.tmdbId!==film.tmdbId));
     }catch{}
     setLoadingId(null);
@@ -729,13 +730,28 @@ function SuggestionsModal({data,onClose,onAdd}){
     <Fade>
       <div style={{position:"fixed",inset:0,background:t.overlayBg,display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:10002,padding:"1rem"}} onClick={onClose}>
         <div onClick={e=>e.stopPropagation()} style={{background:t.bgModal,border:`1px solid ${t.border}`,borderRadius:14,padding:"1.25rem",width:"min(860px, 100%)",maxHeight:"70vh",overflowY:"auto"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
+
+          {/* Header */}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"1rem"}}>
             <div>
               <div style={{fontSize:15,fontWeight:600,color:t.textPrimary}}>You might also like…</div>
               <div style={{fontSize:12,color:t.textSecondary,marginTop:2}}>Based on <em>{data.basedOn}</em> · tap to add</div>
             </div>
-            <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",fontSize:22,color:t.textMuted}}>×</button>
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
+              <label onClick={e=>e.stopPropagation()} style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:t.textSecondary,cursor:"pointer",userSelect:"none"}}>
+                <input
+                  type="checkbox"
+                  checked={addToWatchlist}
+                  onChange={e=>setAddToWatchlist(e.target.checked)}
+                  style={{cursor:"pointer",accentColor:t.accent}}
+                />
+                Add to watchlist
+              </label>
+              <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",fontSize:22,color:t.textMuted,lineHeight:1}}>×</button>
+            </div>
           </div>
+
+          {/* Grid */}
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(120px, 1fr))",gap:10}}>
             {picks.map(film=>{
               const isLoading=loadingId===film.tmdbId;
