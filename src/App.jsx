@@ -474,9 +474,9 @@ function FilmDetailModal({ film, onClose, onRemove, onToggleRewatch, onMoveToWat
             </div>
 
             <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-              <button onClick={() => { onShare(film); onClose(); }} style={{ fontSize:13, color:"#fff", background:"none", border:"1px solid #2a2a4a", borderRadius:8, padding:"8px 16px", cursor:"pointer" }}>📤 Share</button>
               {isUnlocked && (
                 <>
+                  <button onClick={() => { onShare(film); onClose(); }} style={{ fontSize:13, color:"#fff", background:"none", border:"1px solid #2a2a4a", borderRadius:8, padding:"8px 16px", cursor:"pointer" }}>📤 Share</button>
                   {film.list === "watchlist"
                     ? <button onClick={() => { onMoveToWatched(film.id); onClose(); }} style={{ fontSize:13, color:"#a388ee", background:"none", border:"1px solid #2a2a5a", borderRadius:8, padding:"8px 16px", cursor:"pointer" }}>✓ Move to watched</button>
                     : <button onClick={() => onToggleRewatch(film.id)} style={{ fontSize:13, color:"#4ade80", background:"none", border:"1px solid #1a3a2a", borderRadius:8, padding:"8px 16px", cursor:"pointer" }}>{film.rewatched ? "↩ Rewatched ✓" : "Mark as rewatched"}</button>
@@ -795,9 +795,16 @@ function AppInner() {
           <div style={{ fontSize:22, fontWeight:500, color:"#fff" }}>My Film Collection</div>
           <div style={{ fontSize:13, color:"#8888aa" }}>{watchedFilms.length} watched · {watchlistFilms.length} on watchlist</div>
         </div>
-        <button onClick={handleAddClick} style={{ background:"#7F77DD", color:"#fff", border:"none", borderRadius:8, padding:"10px 20px", fontWeight:500, cursor:"pointer", fontSize:14 }}>
-          {isUnlocked ? "+ Add film" : "🔒 Add film"}
-        </button>
+        <div style={{ display:"flex", gap:8 }}>
+          {!isUnlocked && (
+            <button onClick={() => setShowPassword(true)} style={{ background:"none", color:"#8888aa", border:"1px solid #2a2a4a", borderRadius:8, padding:"10px 16px", fontWeight:500, cursor:"pointer", fontSize:14 }}>
+              🔒 Unlock
+            </button>
+          )}
+          <button onClick={handleAddClick} style={{ background:"#7F77DD", color:"#fff", border:"none", borderRadius:8, padding:"10px 20px", fontWeight:500, cursor:"pointer", fontSize:14 }}>
+            {isUnlocked ? "+ Add film" : "🔒 Add film"}
+          </button>
+        </div>
       </div>
 
       <div style={{ display:"flex", gap:8, marginBottom:"1.5rem", flexWrap:"wrap" }}>
