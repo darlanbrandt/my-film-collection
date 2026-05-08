@@ -159,7 +159,8 @@ async function getDetails(candidate, directorHint) {
     if (omdb.imdbRating&&omdb.imdbRating!=="N/A") imdbRating=omdb.imdbRating;
     if (omdb.imdbID) imdbId=omdb.imdbID;
   } catch {}
-  return {title,year,genre,director:directorHint||director,country,actors,awards:String(awards),imdbRating,imdbId,poster,backdrop,plot,runtime};
+  // tmdbId travels in memory only — not saved to Supabase (filmToRow doesn't map it)
+  return {title,year,genre,director:directorHint||director,country,actors,awards:String(awards),imdbRating,imdbId,tmdbId:String(detail.id||""),poster,backdrop,plot,runtime};
 }
 
 // ─── Storage Hook ─────────────────────────────────────────────────────────────
@@ -693,6 +694,41 @@ function AddModal({onClose,onAdd,onUpdate,existingFilms,editFilm}){
   );
 }
 
+// ─── Suggestions Modal ────────────────────────────────────────────────────────
+function SuggestionsModal({data,onClose}){
+  const t=useT();
+  return(
+    <Fade>
+      <div style={{position:"fixed",inset:0,background:t.overlayBg,display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:10002,padding:"1rem"}} onClick={onClose}>
+        <div onClick={e=>e.stopPropagation()} style={{background:t.bgModal,border:`1px solid ${t.border}`,borderRadius:14,padding:"1.25rem",width:"min(860px, 100%)",maxHeight:"70vh",overflowY:"auto"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
+            <div>
+              <div style={{fontSize:15,fontWeight:600,color:t.textPrimary}}>You might also like…</div>
+              <div style={{fontSize:12,color:t.textSecondary,marginTop:2}}>Based on <em>{data.basedOn}</em></div>
+            </div>
+            <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",fontSize:22,color:t.textMuted}}>×</button>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(120px, 1fr))",gap:10}}>
+            {data.picks.map(film=>(
+              <div key={film.tmdbId} style={{borderRadius:8,overflow:"hidden",border:`1px solid ${t.border}`,background:t.bgSecondary}}>
+                <div style={{height:170,background:t.bgTertiary,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  {film.poster
+                    ?<img src={film.poster} alt={film.title} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                    :<span style={{fontSize:28,opacity:.4}}>🎬</span>}
+                </div>
+                <div style={{padding:"8px 10px"}}>
+                  <div style={{fontSize:12,fontWeight:500,color:t.textPrimary,lineHeight:1.3}}>{film.title}</div>
+                  <div style={{fontSize:11,color:t.textSecondary,marginTop:2}}>{film.year}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </Fade>
+  );
+}
+
 // ─── App ──────────────────────────────────────────────────────────────────────
 function AppInner(){
   const[themeId,setThemeId]=useState(()=>{try{return localStorage.getItem("mfc_theme")||"dark-violet";}catch{return"dark-violet";}});
@@ -722,6 +758,7 @@ function AppInner(){
   const[selectedFilm,setSelectedFilm]=useState(null);
   const[editFilm,setEditFilm]=useState(null);
   const[shareFilm,setShareFilm]=useState(null);
+  const[suggestions,setSuggestions]=useState(null);
 
   useEffect(()=>{setPage(1);},[tab,search,filterGenre,filterDecade,filterDirector,filterCountry,sortBy,sortDir]);
 
@@ -731,6 +768,22 @@ function AppInner(){
   const requireUnlock=(action)=>{if(isUnlocked)action();else{setPendingAction(()=>action);setShowPassword(true);}};
   const handleAddClick=()=>requireUnlock(()=>setShowAdd(true));
   const handleEdit=(film)=>requireUnlock(()=>setEditFilm(film));
+
+  const handleAdd=async(film)=>{
+    await addFilm(film);
+    if(film.tmdbId){
+      try{
+        const d=await tmdbFetch(`/movie/${film.tmdbId}/recommendations`);
+        const picks=(d.results||[]).slice(0,6).map(r=>({
+          tmdbId:String(r.id),
+          title:r.title,
+          year:r.release_date?.slice(0,4)||"?",
+          poster:r.poster_path?`${TMDB_IMG}${r.poster_path}`:null,
+        }));
+        if(picks.length) setSuggestions({basedOn:film.title,picks});
+      }catch{}
+    }
+  };
 
   const watchedFilms=films.filter(f=>f.list!=="watchlist");
   const watchlistFilms=films.filter(f=>f.list==="watchlist");
@@ -943,9 +996,10 @@ function AppInner(){
         {(showAdd||editFilm)&&(
           <AddModal
             onClose={()=>{setShowAdd(false);setEditFilm(null);}}
-            onAdd={addFilm} onUpdate={updateFilm} existingFilms={films} editFilm={editFilm}
+            onAdd={handleAdd} onUpdate={updateFilm} existingFilms={films} editFilm={editFilm}
           />
         )}
+        {suggestions&&<SuggestionsModal data={suggestions} onClose={()=>setSuggestions(null)}/>}
       </div>
     </ThemeContext.Provider>
   );
