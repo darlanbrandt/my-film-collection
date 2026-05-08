@@ -695,8 +695,36 @@ function AddModal({onClose,onAdd,onUpdate,existingFilms,editFilm}){
 }
 
 // ─── Suggestions Modal ────────────────────────────────────────────────────────
-function SuggestionsModal({data,onClose}){
+function SuggestionsModal({data,onClose,onAdd}){
   const t=useT();
+  const[picks,setPicks]=useState(data.picks);
+  const[loadingId,setLoadingId]=useState(null);
+
+  const handlePick=async(film)=>{
+    if(loadingId) return;
+    setLoadingId(film.tmdbId);
+    try{
+      const details=await getDetails({tmdb_id:film.tmdbId,poster_path:null,overview:""},"");
+      await onAdd({...details,awards:Number(details.awards)||0,rewatched:false,list:"watched"});
+      setPicks(prev=>prev.filter(p=>p.tmdbId!==film.tmdbId));
+    }catch{}
+    setLoadingId(null);
+  };
+
+  if(!picks.length){
+    return(
+      <Fade>
+        <div style={{position:"fixed",inset:0,background:t.overlayBg,display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:10002,padding:"1rem"}} onClick={onClose}>
+          <div onClick={e=>e.stopPropagation()} style={{background:t.bgModal,border:`1px solid ${t.border}`,borderRadius:14,padding:"2rem",width:"min(860px, 100%)",textAlign:"center"}}>
+            <div style={{fontSize:15,fontWeight:600,color:t.textPrimary,marginBottom:6}}>All added!</div>
+            <div style={{fontSize:13,color:t.textSecondary,marginBottom:"1rem"}}>Your collection is growing.</div>
+            <button onClick={onClose} style={{background:t.accent,color:t.accentText,border:"none",borderRadius:8,padding:"9px 24px",fontWeight:500,cursor:"pointer",fontSize:13}}>Done</button>
+          </div>
+        </div>
+      </Fade>
+    );
+  }
+
   return(
     <Fade>
       <div style={{position:"fixed",inset:0,background:t.overlayBg,display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:10002,padding:"1rem"}} onClick={onClose}>
@@ -704,24 +732,33 @@ function SuggestionsModal({data,onClose}){
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
             <div>
               <div style={{fontSize:15,fontWeight:600,color:t.textPrimary}}>You might also like…</div>
-              <div style={{fontSize:12,color:t.textSecondary,marginTop:2}}>Based on <em>{data.basedOn}</em></div>
+              <div style={{fontSize:12,color:t.textSecondary,marginTop:2}}>Based on <em>{data.basedOn}</em> · tap to add</div>
             </div>
             <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",fontSize:22,color:t.textMuted}}>×</button>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(120px, 1fr))",gap:10}}>
-            {data.picks.map(film=>(
-              <div key={film.tmdbId} style={{borderRadius:8,overflow:"hidden",border:`1px solid ${t.border}`,background:t.bgSecondary}}>
-                <div style={{height:170,background:t.bgTertiary,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                  {film.poster
-                    ?<img src={film.poster} alt={film.title} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-                    :<span style={{fontSize:28,opacity:.4}}>🎬</span>}
+            {picks.map(film=>{
+              const isLoading=loadingId===film.tmdbId;
+              return(
+                <div key={film.tmdbId} onClick={()=>handlePick(film)} style={{borderRadius:8,overflow:"hidden",border:`1px solid ${isLoading?t.accent:t.border}`,background:t.bgSecondary,cursor:loadingId?"default":"pointer",opacity:loadingId&&!isLoading?0.5:1,transition:"opacity 0.15s, border-color 0.15s"}}
+                  onMouseEnter={e=>{if(!loadingId)e.currentTarget.style.borderColor=t.accent;}}
+                  onMouseLeave={e=>{if(!loadingId)e.currentTarget.style.borderColor=t.border;}}
+                >
+                  <div style={{height:170,background:t.bgTertiary,display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
+                    {film.poster
+                      ?<img src={film.poster} alt={film.title} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                      :<span style={{fontSize:28,opacity:.4}}>🎬</span>}
+                    {isLoading&&(
+                      <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>⏳</div>
+                    )}
+                  </div>
+                  <div style={{padding:"8px 10px"}}>
+                    <div style={{fontSize:12,fontWeight:500,color:t.textPrimary,lineHeight:1.3}}>{film.title}</div>
+                    <div style={{fontSize:11,color:t.textSecondary,marginTop:2}}>{film.year}</div>
+                  </div>
                 </div>
-                <div style={{padding:"8px 10px"}}>
-                  <div style={{fontSize:12,fontWeight:500,color:t.textPrimary,lineHeight:1.3}}>{film.title}</div>
-                  <div style={{fontSize:11,color:t.textSecondary,marginTop:2}}>{film.year}</div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
@@ -999,7 +1036,7 @@ function AppInner(){
             onAdd={handleAdd} onUpdate={updateFilm} existingFilms={films} editFilm={editFilm}
           />
         )}
-        {suggestions&&<SuggestionsModal data={suggestions} onClose={()=>setSuggestions(null)}/>}
+        {suggestions&&<SuggestionsModal data={suggestions} onClose={()=>setSuggestions(null)} onAdd={addFilm}/>}
       </div>
     </ThemeContext.Provider>
   );
