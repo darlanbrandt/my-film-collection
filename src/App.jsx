@@ -286,6 +286,8 @@ function ShareCard({ film, onClose }) {
 
   const proxyUrl = (url) => url ? `${PROXY}/image?url=${encodeURIComponent(url)}` : null;
 
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
   useEffect(() => {
     (async () => {
       const canvas = canvasRef.current;
@@ -302,17 +304,26 @@ function ShareCard({ film, onClose }) {
       if (film.poster) {
         try {
           const bgImg = await loadImage(proxyUrl(film.poster));
-          ctx.save();
-          ctx.filter = "blur(40px) brightness(0.25)";
-          ctx.drawImage(bgImg, -60, -60, W + 120, H + 120);
-          ctx.restore();
+          if (!isIOS) {
+            // Blur only on non-iOS (Safari doesn't support ctx.filter)
+            ctx.save();
+            ctx.filter = "blur(40px) brightness(0.25)";
+            ctx.drawImage(bgImg, -60, -60, W + 120, H + 120);
+            ctx.restore();
+          } else {
+            // iOS fallback: dark tinted background instead of blur
+            ctx.save();
+            ctx.globalAlpha = 0.15;
+            ctx.drawImage(bgImg, 0, 0, W, H);
+            ctx.restore();
+          }
         } catch {}
       }
 
       const overlay = ctx.createLinearGradient(0, 0, 0, H);
-      overlay.addColorStop(0, "rgba(0,0,0,0.3)");
-      overlay.addColorStop(0.5, "rgba(0,0,0,0.1)");
-      overlay.addColorStop(1, "rgba(0,0,0,0.7)");
+      overlay.addColorStop(0, "rgba(0,0,0,0.6)");
+      overlay.addColorStop(0.5, "rgba(0,0,0,0.4)");
+      overlay.addColorStop(1, "rgba(0,0,0,0.8)");
       ctx.fillStyle = overlay;
       ctx.fillRect(0, 0, W, H);
 
@@ -403,10 +414,18 @@ function ShareCard({ film, onClose }) {
   }, []);
 
   const download = () => {
-    const link = document.createElement("a");
-    link.download = `${film.title.replace(/[^a-z0-9]/gi, "_")}_share.png`;
-    link.href = canvasRef.current.toDataURL("image/png");
-    link.click();
+    const dataUrl = canvasRef.current.toDataURL("image/png");
+    if (isIOS) {
+      // iOS Safari can't trigger downloads — open in new tab, user saves manually
+      const w = window.open();
+      w.document.write(`<img src="${dataUrl}" style="max-width:100%" />`);
+      w.document.title = film.title;
+    } else {
+      const link = document.createElement("a");
+      link.download = `${film.title.replace(/[^a-z0-9]/gi, "_")}_share.png`;
+      link.href = dataUrl;
+      link.click();
+    }
   };
 
   return (
@@ -417,9 +436,9 @@ function ShareCard({ film, onClose }) {
           <canvas ref={canvasRef} style={{ width:"100%", borderRadius:12, boxShadow:"0 8px 40px rgba(0,0,0,0.8)", display: ready ? "block" : "none" }} />
           <div style={{ display:"flex", gap:8, width:"100%" }}>
             <button onClick={onClose} style={{ flex:1, background:"none", border:"1px solid #2a2a4a", borderRadius:8, color:"#aaa", padding:"10px", cursor:"pointer", fontSize:13 }}>Close</button>
-            {ready && <button onClick={download} style={{ flex:2, background:"#7F77DD", color:"#fff", border:"none", borderRadius:8, padding:"10px", fontWeight:500, cursor:"pointer", fontSize:14 }}>⬇ Download for Stories</button>}
+            {ready && <button onClick={download} style={{ flex:2, background:"#7F77DD", color:"#fff", border:"none", borderRadius:8, padding:"10px", fontWeight:500, cursor:"pointer", fontSize:14 }}>{isIOS ? "🖼 Open image" : "⬇ Download for Stories"}</button>}
           </div>
-          {ready && <div style={{ fontSize:11, color:"#666", textAlign:"center" }}>Save and share it to your Instagram Story</div>}
+          {ready && <div style={{ fontSize:11, color:"#666", textAlign:"center" }}>{isIOS ? "Long-press the image to save it, then share to Instagram Stories" : "Save and share it to your Instagram Story"}</div>}
         </div>
       </div>
     </Fade>
