@@ -246,6 +246,34 @@ function StatCard({ label, value, sub }) {
   );
 }
 
+// ─── Film List Row ────────────────────────────────────────────────────────────
+function FilmListRow({ film, onSelect }) {
+  return (
+    <div onClick={() => onSelect(film)} style={{ cursor:"pointer", display:"flex", alignItems:"center", gap:12, padding:"8px 10px", borderRadius:8, border:"1px solid #2a2a4a", background:"#1a1a2e", transition:"border-color 0.15s, background 0.15s" }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor="#7F77DD"; e.currentTarget.style.background="#1e1e38"; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor="#2a2a4a"; e.currentTarget.style.background="#1a1a2e"; }}
+    >
+      <div style={{ width:40, height:60, borderRadius:5, overflow:"hidden", flexShrink:0, background:"#12122a", display:"flex", alignItems:"center", justifyContent:"center" }}>
+        {film.poster && film.poster !== "N/A"
+          ? <img src={film.poster} alt={film.title} style={{ width:"100%", height:"100%", objectFit:"cover" }} onError={e => e.target.style.display="none"} />
+          : <span style={{ fontSize:16, opacity:.4 }}>🎬</span>}
+      </div>
+      <div style={{ flex:1, minWidth:0 }}>
+        <div style={{ fontWeight:500, fontSize:14, color:"#fff", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{film.title}</div>
+        <div style={{ fontSize:12, color:"#8888aa", marginTop:2 }}>
+          {film.year}{film.director ? ` · ${film.director}` : ""}{film.genre ? ` · ${film.genre.split(",")[0]}` : ""}
+        </div>
+      </div>
+      <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:4, flexShrink:0 }}>
+        {film.imdbRating && <div style={{ fontSize:12, color:"#f5c518" }}>⭐ {film.imdbRating}</div>}
+        {film.awards > 0 && <div style={{ fontSize:11, background:"#3a2a00", color:"#f5c518", borderRadius:6, padding:"1px 7px" }}>★ {film.awards}</div>}
+        {film.rewatched && <div style={{ fontSize:10, background:"#1a3a2a", color:"#4ade80", borderRadius:6, padding:"1px 7px" }}>↩</div>}
+        {film.list === "watchlist" && <div style={{ fontSize:10, background:"#1a1a4a", color:"#a388ee", borderRadius:6, padding:"1px 7px" }}>🔖</div>}
+      </div>
+    </div>
+  );
+}
+
 // ─── Film Card ────────────────────────────────────────────────────────────────
 function FilmCard({ film, onSelect }) {
   return (
@@ -599,9 +627,9 @@ function AppInner() {
   const [sortBy, setSortBy] = useState("dateAdded");
   const [selectedFilm, setSelectedFilm] = useState(null);
   const [editFilm, setEditFilm] = useState(null);
-  const [page, setPage] = useState(1);
+  const [viewMode, setViewMode] = useState("grid");
 
-  // Reset page on filter/tab change
+  const [page, setPage] = useState(1);
   useEffect(() => { setPage(1); }, [tab, search, filterGenre, filterDecade, filterDirector, filterCountry, sortBy]);
 
   const requireUnlock = (action) => {
@@ -704,7 +732,7 @@ function AppInner() {
   );
 
   return (
-    <div style={{ fontFamily:"'Syne', sans-serif", padding:"1rem", maxWidth:900, margin:"0 auto", background:"#0a0a18", minHeight:"100vh" }}>
+    <div style={{ fontFamily:"'Syne', sans-serif", padding:"1rem", maxWidth:900, margin:"0 auto", background:"#0a0a18", minHeight:"100vh", scrollbarGutter:"stable" }}>
       {/* Header */}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1.5rem", flexWrap:"wrap", gap:12 }}>
         <div>
@@ -770,14 +798,23 @@ function AppInner() {
               <option value="awards">Oscar wins</option>
             </select>
             <span style={{ fontSize:12, color:"#8888aa", marginLeft:"auto" }}>{filtered.length} film{filtered.length !== 1 ? "s" : ""}</span>
+            <div style={{ display:"flex", gap:4 }}>
+              <button onClick={() => setViewMode("grid")} title="Grid view" style={{ background: viewMode==="grid" ? "#7F77DD" : "#1a1a2e", border:"1px solid #2a2a4a", borderRadius:6, padding:"5px 9px", cursor:"pointer", color: viewMode==="grid" ? "#fff" : "#8888aa", fontSize:14, lineHeight:1 }}>⊞</button>
+              <button onClick={() => setViewMode("list")} title="List view" style={{ background: viewMode==="list" ? "#7F77DD" : "#1a1a2e", border:"1px solid #2a2a4a", borderRadius:6, padding:"5px 9px", cursor:"pointer", color: viewMode==="list" ? "#fff" : "#8888aa", fontSize:14, lineHeight:1 }}>☰</button>
+            </div>
           </div>
 
           {filtered.length === 0
             ? <EmptyState isWatchlist={tab==="watchlist"} onAdd={handleAddClick} isUnlocked={isUnlocked} />
-            : <>
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(150px, 1fr))", gap:12 }}>
-                  {paginated.map(f => <FilmCard key={f.id} film={f} onSelect={setSelectedFilm} />)}
-                </div>
+            : <div style={{ scrollbarGutter:"stable" }}>
+                {viewMode === "grid"
+                  ? <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(150px, 1fr))", gap:12 }}>
+                      {paginated.map(f => <FilmCard key={f.id} film={f} onSelect={setSelectedFilm} />)}
+                    </div>
+                  : <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                      {paginated.map(f => <FilmListRow key={f.id} film={f} onSelect={setSelectedFilm} />)}
+                    </div>
+                }
                 {hasMore && (
                   <div style={{ textAlign:"center", marginTop:"1.5rem" }}>
                     <button onClick={() => setPage(p => p + 1)} style={{ background:"#1a1a2e", color:"#aaa", border:"1px solid #2a2a4a", borderRadius:8, padding:"10px 28px", cursor:"pointer", fontSize:13 }}>
@@ -785,7 +822,7 @@ function AppInner() {
                     </button>
                   </div>
                 )}
-              </>
+              </div>
           }
         </>
       )}
