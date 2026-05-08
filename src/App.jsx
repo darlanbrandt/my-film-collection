@@ -616,10 +616,10 @@ function AppInner() {
   const watchlistFilms = films.filter(f => f.list === "watchlist");
   const activeFilms = tab === "watchlist" ? watchlistFilms : watchedFilms;
 
-  const allGenres = ["All", ...new Set(activeFilms.flatMap(f => f.genre?.split(",").map(g=>g.trim()).filter(Boolean)))].sort();
-  const allDecades = ["All", ...new Set(activeFilms.map(f=>decadeOf(f.year)).filter(d=>d!=="Unknown"))].sort();
-  const allDirectors = ["All", ...new Set(activeFilms.map(f=>f.director).filter(Boolean))].sort();
-  const allCountries = ["All", ...new Set(activeFilms.map(f=>f.country).filter(Boolean))].sort();
+  const allGenres = ["All", ...new Set(activeFilms.flatMap(f => f.genre?.split(",").map(g=>g.trim()).filter(Boolean))).values()].sort((a,b) => a==="All" ? -1 : b==="All" ? 1 : a.localeCompare(b));
+  const allDecades = ["All", ...new Set(activeFilms.map(f=>decadeOf(f.year)).filter(d=>d!=="Unknown")).values()].sort((a,b) => a==="All" ? -1 : b==="All" ? 1 : a.localeCompare(b));
+  const allDirectors = ["All", ...new Set(activeFilms.map(f=>f.director).filter(Boolean)).values()].sort((a,b) => a==="All" ? -1 : b==="All" ? 1 : a.localeCompare(b));
+  const allCountries = ["All", ...new Set(activeFilms.map(f=>f.country).filter(Boolean)).values()].sort((a,b) => a==="All" ? -1 : b==="All" ? 1 : a.localeCompare(b));
 
   // Count badges
   const genreCounts = activeFilms.reduce((m, f) => { f.genre?.split(",").forEach(g => { const k = g.trim(); if (k) m[k] = (m[k]||0)+1; }); return m; }, {});
