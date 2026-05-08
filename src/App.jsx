@@ -37,6 +37,7 @@ function rowToFilm(row) {
     actors: row.actors,
     awards: row.awards ?? 0,
     imdbRating: row.imdb_rating,
+    imdbId: row.imdb_id,
     poster: row.poster,
     backdrop: row.backdrop,
     plot: row.plot,
@@ -56,6 +57,7 @@ function filmToRow(film) {
     actors: film.actors,
     awards: Number(film.awards) || 0,
     imdb_rating: film.imdbRating,
+    imdb_id: film.imdbId,
     poster: film.poster,
     backdrop: film.backdrop,
     plot: film.plot,
@@ -114,10 +116,11 @@ async function getDetails(candidate, directorHint) {
 
   let awards = 0;
   let imdbRating = "";
+  let imdbId = "";
   try {
-    const imdbId = detail.imdb_id || "";
-    const query = imdbId
-      ? `${PROXY}/omdb?imdbId=${imdbId}`
+    const tmdbImdbId = detail.imdb_id || "";
+    const query = tmdbImdbId
+      ? `${PROXY}/omdb?imdbId=${tmdbImdbId}`
       : `${PROXY}/omdb?title=${encodeURIComponent(title)}&year=${year}`;
     const omdbRes = await fetch(query);
     const omdb = await omdbRes.json();
@@ -126,9 +129,10 @@ async function getDetails(candidate, directorHint) {
       if (match) awards = parseInt(match[1]);
     }
     if (omdb.imdbRating && omdb.imdbRating !== "N/A") imdbRating = omdb.imdbRating;
+    if (omdb.imdbID) imdbId = omdb.imdbID;
   } catch {}
 
-  return { title, year, genre, director: directorHint || director, country, actors, awards: String(awards), imdbRating, poster, backdrop, plot, runtime };
+  return { title, year, genre, director: directorHint || director, country, actors, awards: String(awards), imdbRating, imdbId, poster, backdrop, plot, runtime };
 }
 
 function useFilms() {
@@ -173,6 +177,7 @@ function useFilms() {
 const inp = { background:"#12122a", border:"1px solid #2a2a4a", borderRadius:6, color:"#fff", padding:"8px 10px", fontSize:13, boxSizing:"border-box" };
 
 function FilmDetailModal({ film, onClose, onRemove, onToggleRewatch, isUnlocked }) {
+  const [confirmRemove, setConfirmRemove] = useState(false);
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.95)", zIndex:9999, overflowY:"auto" }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{ maxWidth:860, margin:"0 auto", paddingBottom:"3rem" }}>
@@ -253,9 +258,16 @@ function FilmDetailModal({ film, onClose, onRemove, onToggleRewatch, isUnlocked 
               <button onClick={() => onToggleRewatch(film.id)} style={{ fontSize:13, color:"#4ade80", background:"none", border:"1px solid #1a3a2a", borderRadius:8, padding:"8px 16px", cursor:"pointer" }}>
                 {film.rewatched ? "↩ Rewatched ✓" : "Mark as rewatched"}
               </button>
-              <button onClick={() => { onRemove(film.id); onClose(); }} style={{ fontSize:13, color:"#ff6b6b", background:"none", border:"1px solid #3a2a2a", borderRadius:8, padding:"8px 16px", cursor:"pointer" }}>
-                Remove from collection
-              </button>
+              {!confirmRemove
+                ? <button onClick={() => setConfirmRemove(true)} style={{ fontSize:13, color:"#ff6b6b", background:"none", border:"1px solid #3a2a2a", borderRadius:8, padding:"8px 16px", cursor:"pointer" }}>
+                    Remove from collection
+                  </button>
+                : <div style={{ display:"flex", alignItems:"center", gap:8, background:"#1a0a0a", border:"1px solid #3a2a2a", borderRadius:8, padding:"8px 12px" }}>
+                    <span style={{ fontSize:13, color:"#ff8888" }}>Remove "{film.title}"?</span>
+                    <button onClick={() => { onRemove(film.id); onClose(); }} style={{ fontSize:12, color:"#fff", background:"#cc3333", border:"none", borderRadius:6, padding:"5px 12px", cursor:"pointer", fontWeight:500 }}>Yes, remove</button>
+                    <button onClick={() => setConfirmRemove(false)} style={{ fontSize:12, color:"#aaa", background:"none", border:"1px solid #444", borderRadius:6, padding:"5px 12px", cursor:"pointer" }}>Cancel</button>
+                  </div>
+              }
             </div>
           )}
         </div>
@@ -320,7 +332,7 @@ function FilmCard({ film, onSelect }) {
   );
 }
 
-function AddModal({ onClose, onAdd }) {
+function AddModal({ onClose, onAdd, existingFilms }) {
   const [query, setQuery] = useState("");
   const [yearQuery, setYearQuery] = useState("");
   const [directorQuery, setDirectorQuery] = useState("");
@@ -328,7 +340,7 @@ function AddModal({ onClose, onAdd }) {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
   const [candidates, setCandidates] = useState([]);
-  const [form, setForm] = useState({ title:"", year:"", genre:"", director:"", country:"", actors:"", awards:"", imdbRating:"", poster:"", backdrop:"", plot:"", runtime:"" });
+  const [form, setForm] = useState({ title:"", year:"", genre:"", director:"", country:"", actors:"", awards:"", imdbRating:"", imdbId:"", poster:"", backdrop:"", plot:"", runtime:"" });
   const [err, setErr] = useState("");
 
   const doSearch = async () => {
@@ -370,6 +382,11 @@ function AddModal({ onClose, onAdd }) {
   const handleAdd = () => {
     if (!form.title.trim()) { setErr("Title is required."); return; }
     if (!form.year.trim() || isNaN(parseInt(form.year))) { setErr("A valid year is required."); return; }
+    const duplicate = existingFilms.find(f =>
+      (form.imdbId && f.imdbId && form.imdbId === f.imdbId) ||
+      (f.title.trim().toLowerCase() === form.title.trim().toLowerCase() && f.year === form.year.trim())
+    );
+    if (duplicate) { setErr(`"${duplicate.title}" (${duplicate.year}) is already in your collection.`); return; }
     onAdd({ ...form, awards: Number(form.awards) || 0, rewatched: false });
     onClose();
   };
@@ -652,7 +669,7 @@ function AppInner() {
         />
       )}
       {showPassword && <PasswordModal onSuccess={() => { setIsUnlocked(true); setShowAdd(true); }} onClose={() => setShowPassword(false)} />}
-      {showAdd && <AddModal onClose={()=>setShowAdd(false)} onAdd={addFilm} />}
+      {showAdd && <AddModal onClose={()=>setShowAdd(false)} onAdd={addFilm} existingFilms={films} />}
     </div>
   );
 }
