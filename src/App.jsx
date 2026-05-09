@@ -695,19 +695,34 @@ function AddModal({onClose,onAdd,onUpdate,existingFilms,editFilm}){
 }
 
 // ─── Suggestions Modal ────────────────────────────────────────────────────────
-function SuggestionsModal({data,onClose,onAdd}){
+function SuggestionsModal({data,onClose,onAdd,existingFilms}){
   const t=useT();
-  const[picks,setPicks]=useState(data.picks);
-  const[loadingId,setLoadingId]=useState(null);
   const[addToWatchlist,setAddToWatchlist]=useState(false);
+  const[loadingId,setLoadingId]=useState(null);
+
+  // Pre-filter suggestions: remove any that already exist in the collection by title+year
+  const isDup=(title,year)=>existingFilms.some(f=>
+    f.title.trim().toLowerCase()===title.trim().toLowerCase()&&f.year===String(year)
+  );
+  const[picks,setPicks]=useState(()=>data.picks.filter(p=>!isDup(p.title,p.year)));
 
   const handlePick=async(film)=>{
     if(loadingId) return;
     setLoadingId(film.tmdbId);
     try{
       const details=await getDetails({tmdb_id:film.tmdbId,poster_path:null,overview:""},"");
-      await onAdd({...details,awards:Number(details.awards)||0,rewatched:false,list:addToWatchlist?"watchlist":"watched"});
-      setPicks(prev=>prev.filter(p=>p.tmdbId!==film.tmdbId));
+      // Second check using imdbId after full details are loaded
+      const dup=existingFilms.find(f=>
+        (details.imdbId&&f.imdbId&&details.imdbId===f.imdbId)||
+        (f.title.trim().toLowerCase()===details.title.trim().toLowerCase()&&f.year===details.year)
+      );
+      if(dup){
+        // Already in collection — just remove from suggestions silently
+        setPicks(prev=>prev.filter(p=>p.tmdbId!==film.tmdbId));
+      } else {
+        await onAdd({...details,awards:Number(details.awards)||0,rewatched:false,list:addToWatchlist?"watchlist":"watched"});
+        setPicks(prev=>prev.filter(p=>p.tmdbId!==film.tmdbId));
+      }
     }catch{}
     setLoadingId(null);
   };
@@ -717,7 +732,7 @@ function SuggestionsModal({data,onClose,onAdd}){
       <Fade>
         <div style={{position:"fixed",inset:0,background:t.overlayBg,display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:10002,padding:"1rem"}} onClick={onClose}>
           <div onClick={e=>e.stopPropagation()} style={{background:t.bgModal,border:`1px solid ${t.border}`,borderRadius:14,padding:"2rem",width:"min(860px, 100%)",textAlign:"center"}}>
-            <div style={{fontSize:15,fontWeight:600,color:t.textPrimary,marginBottom:6}}>All added!</div>
+            <div style={{fontSize:15,fontWeight:600,color:t.textPrimary,marginBottom:6}}>All done!</div>
             <div style={{fontSize:13,color:t.textSecondary,marginBottom:"1rem"}}>Your collection is growing.</div>
             <button onClick={onClose} style={{background:t.accent,color:t.accentText,border:"none",borderRadius:8,padding:"9px 24px",fontWeight:500,cursor:"pointer",fontSize:13}}>Done</button>
           </div>
@@ -1052,7 +1067,14 @@ function AppInner(){
             onAdd={handleAdd} onUpdate={updateFilm} existingFilms={films} editFilm={editFilm}
           />
         )}
-        {suggestions&&<SuggestionsModal data={suggestions} onClose={()=>setSuggestions(null)} onAdd={addFilm}/>}
+        {suggestions&&(
+          <SuggestionsModal
+            data={suggestions}
+            onClose={()=>setSuggestions(null)}
+            onAdd={addFilm}
+            existingFilms={films}
+          />
+        )}
       </div>
     </ThemeContext.Provider>
   );
