@@ -119,6 +119,17 @@ async function tmdbFetch(path, params={}) {
   return res.json();
 }
 
+// Resolve a TMDB ID for any film — uses stored tmdbId if available, otherwise searches by title+year
+async function fetchTmdbId(film) {
+  if (film.tmdbId) return film.tmdbId;
+  try {
+    const params = {query:film.title, include_adult:"false", page:"1"};
+    if (film.year) params.year = film.year;
+    const d = await tmdbFetch("/search/movie", params);
+    return d.results?.[0]?.id ? String(d.results[0].id) : null;
+  } catch { return null; }
+}
+
 async function searchFilms(query, year, director, setStatus) {
   setStatus("Searching TMDB...");
   try {
@@ -159,7 +170,6 @@ async function getDetails(candidate, directorHint) {
     if (omdb.imdbRating&&omdb.imdbRating!=="N/A") imdbRating=omdb.imdbRating;
     if (omdb.imdbID) imdbId=omdb.imdbID;
   } catch {}
-  // tmdbId travels in memory only — not saved to Supabase (filmToRow doesn't map it)
   return {title,year,genre,director:directorHint||director,country,actors,awards:String(awards),imdbRating,imdbId,tmdbId:String(detail.id||""),poster,backdrop,plot,runtime};
 }
 
@@ -202,6 +212,39 @@ function useFilms() {
   return{films,loading,addFilm,updateFilm,removeFilm,toggleRewatch};
 }
 
+// ─── Stats Hook ───────────────────────────────────────────────────────────────
+function useStats(watchedFilms) {
+  const tally = arr => arr.reduce((m,k)=>{m[k]=(m[k]||0)+1;return m;},{});
+  const toChart = obj => Object.entries(obj).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([name,films])=>({name,films}));
+
+  const byDecade = toChart(tally(watchedFilms.map(f=>decadeOf(f.year)).filter(d=>d!=="Unknown"))).sort((a,b)=>a.name.localeCompare(b.name));
+  const byGenre = toChart(tally(watchedFilms.flatMap(f=>f.genre?.split(",").map(g=>g.trim()).filter(Boolean)||[])));
+  const byDirector = toChart(tally(watchedFilms.map(f=>f.director).filter(Boolean)));
+  const byCountry = toChart(tally(watchedFilms.map(f=>f.country).filter(Boolean)));
+
+  const totalOscars = watchedFilms.reduce((s,f)=>s+(Number(f.awards)||0),0);
+  const ratedFilms = watchedFilms.filter(f=>f.imdbRating);
+  const avgRating = ratedFilms.length?(ratedFilms.reduce((s,f)=>s+parseFloat(f.imdbRating),0)/ratedFilms.length).toFixed(1):"-";
+  const topGenre = byGenre[0]?.name||"-";
+  const topDirector = byDirector[0]?.name||"-";
+  const topDecade = [...byDecade].sort((a,b)=>b.films-a.films)[0]?.name||"-";
+  const topForeignCountry = (()=>{
+    const c={};
+    watchedFilms.forEach(f=>{if(f.country&&f.country!=="United States"&&f.country!=="USA")c[f.country]=(c[f.country]||0)+1;});
+    return Object.entries(c).sort((a,b)=>b[1]-a[1])[0]?.[0]||"-";
+  })();
+  const withRuntime = watchedFilms.filter(f=>parseRuntime(f.runtime)>0);
+  const longestFilm = withRuntime.length?withRuntime.reduce((a,b)=>parseRuntime(a.runtime)>parseRuntime(b.runtime)?a:b):null;
+  const shortestFilm = withRuntime.length?withRuntime.reduce((a,b)=>parseRuntime(a.runtime)<parseRuntime(b.runtime)?a:b):null;
+  const mostAwardedDirector = (()=>{
+    const c={};
+    watchedFilms.forEach(f=>{if(f.director&&f.awards>0)c[f.director]=(c[f.director]||0)+Number(f.awards);});
+    return Object.entries(c).sort((a,b)=>b[1]-a[1])[0]||null;
+  })();
+
+  return {byDecade,byGenre,byDirector,byCountry,totalOscars,avgRating,topGenre,topDirector,topDecade,topForeignCountry,longestFilm,shortestFilm,mostAwardedDirector};
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function decadeOf(year){const y=parseInt(year);return isNaN(y)?"Unknown":`${Math.floor(y/10)*10}s`;}
 function parseRuntime(r){if(!r)return 0;const m=String(r).match(/(\d+)/);return m?parseInt(m[1]):0;}
@@ -211,6 +254,29 @@ function Fade({children}){
   const[vis,setVis]=useState(false);
   useEffect(()=>{requestAnimationFrame(()=>setVis(true));},[]);
   return<div style={{opacity:vis?1:0,transition:"opacity 0.2s ease"}}>{children}</div>;
+}
+
+// ─── Toast ────────────────────────────────────────────────────────────────────
+function Toast({message,onDone}){
+  const t=useT();
+  const[vis,setVis]=useState(false);
+  useEffect(()=>{
+    requestAnimationFrame(()=>setVis(true));
+    const t1=setTimeout(()=>setVis(false),2800);
+    const t2=setTimeout(()=>onDone(),3200);
+    return()=>{clearTimeout(t1);clearTimeout(t2);};
+  },[]);
+  return(
+    <div style={{
+      position:"fixed",bottom:28,left:"50%",transform:"translateX(-50%)",
+      background:t.accent,color:t.accentText,padding:"11px 20px",
+      borderRadius:10,fontSize:13,fontWeight:500,zIndex:99999,
+      boxShadow:"0 4px 24px rgba(0,0,0,0.25)",whiteSpace:"nowrap",
+      pointerEvents:"none",opacity:vis?1:0,transition:"opacity 0.35s ease",
+    }}>
+      {message}
+    </div>
+  );
 }
 
 // ─── Theme Toggle ─────────────────────────────────────────────────────────────
@@ -245,20 +311,8 @@ function ThemeToggle({ themeId, onChange }) {
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <Switch
-        checked={cur.mode === "dark"}
-        onToggle={toggleMode}
-        iconOff="☀️"
-        iconOn="🌙"
-        title={cur.mode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-      />
-      <Switch
-        checked={cur.hue === "violet"}
-        onToggle={toggleHue}
-        iconOff="🔵"
-        iconOn="🟣"
-        title={cur.hue === "violet" ? "Switch to blue" : "Switch to violet"}
-      />
+      <Switch checked={cur.mode==="dark"} onToggle={toggleMode} iconOff="☀️" iconOn="🌙" title={cur.mode==="dark"?"Switch to light mode":"Switch to dark mode"}/>
+      <Switch checked={cur.hue==="violet"} onToggle={toggleHue} iconOff="🔵" iconOn="🟣" title={cur.hue==="violet"?"Switch to blue":"Switch to violet"}/>
     </div>
   );
 }
@@ -447,7 +501,7 @@ function ShareCard({film,onClose}){
 }
 
 // ─── Film Detail Modal ────────────────────────────────────────────────────────
-function FilmDetailModal({film,onClose,onRemove,onToggleRewatch,onMoveToWatched,onEdit,onShare,isUnlocked}){
+function FilmDetailModal({film,onClose,onRemove,onToggleRewatch,onMoveToWatched,onEdit,onShare,onFindSimilar,onPrev,onNext,isUnlocked}){
   const t=useT();
   const isLight=t.mode==="light";
   const[confirmRemove,setConfirmRemove]=useState(false);
@@ -455,6 +509,8 @@ function FilmDetailModal({film,onClose,onRemove,onToggleRewatch,onMoveToWatched,
   const backdropGradient=isLight
     ?`linear-gradient(to bottom, rgba(255,255,255,0) 10%, ${t.bgModal} 85%)`
     :`linear-gradient(to bottom, transparent 40%, ${t.bgModal} 100%)`;
+
+  const navBtn={background:"rgba(0,0,0,0.55)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:"50%",width:36,height:36,color:"#fff",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"};
 
   return(
     <Fade>
@@ -467,7 +523,11 @@ function FilmDetailModal({film,onClose,onRemove,onToggleRewatch,onMoveToWatched,
               ?<img src={film.backdrop} alt="" style={{width:"100%",height:"100%",objectFit:"cover",opacity:isLight?0.75:0.6}}/>
               :film.poster?<img src={film.poster} alt="" style={{width:"100%",height:"100%",objectFit:"cover",filter:`blur(18px) brightness(${isLight?0.65:0.4})`,transform:"scale(1.1)"}}/>:null}
             <div style={{position:"absolute",inset:0,background:backdropGradient}}/>
-            <button onClick={onClose} style={{position:"absolute",top:16,right:16,background:"rgba(0,0,0,0.55)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:"50%",width:36,height:36,color:"#fff",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+            {/* Prev / Next */}
+            {onPrev&&<button onClick={e=>{e.stopPropagation();onPrev();}} style={{...navBtn,position:"absolute",top:16,left:16}} title="Previous film (←)">‹</button>}
+            {onNext&&<button onClick={e=>{e.stopPropagation();onNext();}} style={{...navBtn,position:"absolute",top:16,left:onPrev?60:16}} title="Next film (→)">›</button>}
+            {/* Close */}
+            <button onClick={onClose} style={{...navBtn,position:"absolute",top:16,right:16}} title="Close (Esc)">×</button>
           </div>
 
           {/* Content */}
@@ -501,6 +561,8 @@ function FilmDetailModal({film,onClose,onRemove,onToggleRewatch,onMoveToWatched,
 
             {/* Actions */}
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              {/* Find similar — always visible */}
+              <button onClick={()=>{onFindSimilar(film);onClose();}} style={{fontSize:13,color:t.purple,background:"none",border:`1px solid ${t.purpleBorder}`,borderRadius:8,padding:"8px 16px",cursor:"pointer"}}>🎬 Find similar</button>
               {isUnlocked&&(
                 <>
                   <button onClick={()=>{onShare(film);onClose();}} style={{fontSize:13,color:t.textPrimary,background:t.bgSecondary,border:`1px solid ${t.border}`,borderRadius:8,padding:"8px 16px",cursor:"pointer"}}>📤 Share</button>
@@ -695,12 +757,11 @@ function AddModal({onClose,onAdd,onUpdate,existingFilms,editFilm}){
 }
 
 // ─── Suggestions Modal ────────────────────────────────────────────────────────
-function SuggestionsModal({data,onClose,onAdd,existingFilms}){
+function SuggestionsModal({data,onClose,onAdd,existingFilms,showToast}){
   const t=useT();
   const[addToWatchlist,setAddToWatchlist]=useState(false);
   const[loadingId,setLoadingId]=useState(null);
 
-  // Pre-filter suggestions: remove any that already exist in the collection by title+year
   const isDup=(title,year)=>existingFilms.some(f=>
     f.title.trim().toLowerCase()===title.trim().toLowerCase()&&f.year===String(year)
   );
@@ -711,17 +772,16 @@ function SuggestionsModal({data,onClose,onAdd,existingFilms}){
     setLoadingId(film.tmdbId);
     try{
       const details=await getDetails({tmdb_id:film.tmdbId,poster_path:null,overview:""},"");
-      // Second check using imdbId after full details are loaded
       const dup=existingFilms.find(f=>
         (details.imdbId&&f.imdbId&&details.imdbId===f.imdbId)||
         (f.title.trim().toLowerCase()===details.title.trim().toLowerCase()&&f.year===details.year)
       );
       if(dup){
-        // Already in collection — just remove from suggestions silently
         setPicks(prev=>prev.filter(p=>p.tmdbId!==film.tmdbId));
       } else {
         await onAdd({...details,awards:Number(details.awards)||0,rewatched:false,list:addToWatchlist?"watchlist":"watched"});
         setPicks(prev=>prev.filter(p=>p.tmdbId!==film.tmdbId));
+        showToast(`"${details.title}" added to ${addToWatchlist?"watchlist":"collection"}`);
       }
     }catch{}
     setLoadingId(null);
@@ -745,8 +805,6 @@ function SuggestionsModal({data,onClose,onAdd,existingFilms}){
     <Fade>
       <div style={{position:"fixed",inset:0,background:t.overlayBg,display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:10002,padding:"1rem"}} onClick={onClose}>
         <div onClick={e=>e.stopPropagation()} style={{background:t.bgModal,border:`1px solid ${t.border}`,borderRadius:14,padding:"1.25rem",width:"min(860px, 100%)",maxHeight:"70vh",overflowY:"auto"}}>
-
-          {/* Header */}
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"1rem"}}>
             <div>
               <div style={{fontSize:15,fontWeight:600,color:t.textPrimary}}>You might also like…</div>
@@ -754,19 +812,12 @@ function SuggestionsModal({data,onClose,onAdd,existingFilms}){
             </div>
             <div style={{display:"flex",alignItems:"center",gap:12}}>
               <label onClick={e=>e.stopPropagation()} style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:t.textSecondary,cursor:"pointer",userSelect:"none"}}>
-                <input
-                  type="checkbox"
-                  checked={addToWatchlist}
-                  onChange={e=>setAddToWatchlist(e.target.checked)}
-                  style={{cursor:"pointer",accentColor:t.accent}}
-                />
+                <input type="checkbox" checked={addToWatchlist} onChange={e=>setAddToWatchlist(e.target.checked)} style={{cursor:"pointer",accentColor:t.accent}}/>
                 Add to watchlist
               </label>
               <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",fontSize:22,color:t.textMuted,lineHeight:1}}>×</button>
             </div>
           </div>
-
-          {/* Grid */}
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(120px, 1fr))",gap:10}}>
             {picks.map(film=>{
               const isLoading=loadingId===film.tmdbId;
@@ -776,12 +827,8 @@ function SuggestionsModal({data,onClose,onAdd,existingFilms}){
                   onMouseLeave={e=>{if(!loadingId)e.currentTarget.style.borderColor=t.border;}}
                 >
                   <div style={{height:170,background:t.bgTertiary,display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
-                    {film.poster
-                      ?<img src={film.poster} alt={film.title} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-                      :<span style={{fontSize:28,opacity:.4}}>🎬</span>}
-                    {isLoading&&(
-                      <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>⏳</div>
-                    )}
+                    {film.poster?<img src={film.poster} alt={film.title} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span style={{fontSize:28,opacity:.4}}>🎬</span>}
+                    {isLoading&&<div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>⏳</div>}
                   </div>
                   <div style={{padding:"8px 10px"}}>
                     <div style={{fontSize:12,fontWeight:500,color:t.textPrimary,lineHeight:1.3}}>{film.title}</div>
@@ -827,6 +874,10 @@ function AppInner(){
   const[editFilm,setEditFilm]=useState(null);
   const[shareFilm,setShareFilm]=useState(null);
   const[suggestions,setSuggestions]=useState(null);
+  const[suggestionsLoading,setSuggestionsLoading]=useState(false);
+  const[toast,setToast]=useState(null);
+
+  const showToast=(msg)=>setToast(msg);
 
   useEffect(()=>{setPage(1);},[tab,search,filterGenre,filterDecade,filterDirector,filterCountry,sortBy,sortDir]);
 
@@ -837,20 +888,30 @@ function AppInner(){
   const handleAddClick=()=>requireUnlock(()=>setShowAdd(true));
   const handleEdit=(film)=>requireUnlock(()=>setEditFilm(film));
 
+  // Fetch recommendations and show suggestions modal
+  const fetchSuggestions=async(tmdbId,basedOn)=>{
+    setSuggestionsLoading(true);
+    try{
+      const d=await tmdbFetch(`/movie/${tmdbId}/recommendations`);
+      const picks=(d.results||[]).slice(0,6).map(r=>({
+        tmdbId:String(r.id),
+        title:r.title,
+        year:r.release_date?.slice(0,4)||"?",
+        poster:r.poster_path?`${TMDB_IMG}${r.poster_path}`:null,
+      }));
+      if(picks.length) setSuggestions({basedOn,picks});
+    }catch{}
+    setSuggestionsLoading(false);
+  };
+
   const handleAdd=async(film)=>{
     await addFilm(film);
-    if(film.tmdbId){
-      try{
-        const d=await tmdbFetch(`/movie/${film.tmdbId}/recommendations`);
-        const picks=(d.results||[]).slice(0,6).map(r=>({
-          tmdbId:String(r.id),
-          title:r.title,
-          year:r.release_date?.slice(0,4)||"?",
-          poster:r.poster_path?`${TMDB_IMG}${r.poster_path}`:null,
-        }));
-        if(picks.length) setSuggestions({basedOn:film.title,picks});
-      }catch{}
-    }
+    if(film.tmdbId) fetchSuggestions(film.tmdbId,film.title);
+  };
+
+  const handleFindSimilar=async(film)=>{
+    const tmdbId=await fetchTmdbId(film);
+    if(tmdbId) fetchSuggestions(tmdbId,film.title);
   };
 
   const watchedFilms=films.filter(f=>f.list!=="watchlist");
@@ -882,29 +943,27 @@ function AppInner(){
     return dir*(a.id-b.id);
   });
 
+  // Keyboard navigation for film detail modal
+  useEffect(()=>{
+    if(!selectedFilm) return;
+    const handler=(e)=>{
+      if(e.key==="Escape"){setSelectedFilm(null);return;}
+      const idx=filtered.findIndex(f=>f.id===selectedFilm.id);
+      if(e.key==="ArrowRight"&&idx<filtered.length-1) setSelectedFilm(filtered[idx+1]);
+      if(e.key==="ArrowLeft"&&idx>0) setSelectedFilm(filtered[idx-1]);
+    };
+    window.addEventListener("keydown",handler);
+    return()=>window.removeEventListener("keydown",handler);
+  },[selectedFilm,filtered]);
+
+  const selectedIdx=selectedFilm?filtered.findIndex(f=>f.id===selectedFilm.id):-1;
+
   const pageSize=viewMode==="list"?PAGE_SIZE_LIST:PAGE_SIZE;
   const paginated=filtered.slice(0,page*pageSize);
   const hasMore=paginated.length<filtered.length;
 
-  const tally=arr=>arr.reduce((m,k)=>{m[k]=(m[k]||0)+1;return m;},{});
-  const toChart=obj=>Object.entries(obj).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([name,films])=>({name,films}));
-
-  const byDecade=toChart(tally(watchedFilms.map(f=>decadeOf(f.year)).filter(d=>d!=="Unknown"))).sort((a,b)=>a.name.localeCompare(b.name));
-  const byGenre=toChart(tally(watchedFilms.flatMap(f=>f.genre?.split(",").map(g=>g.trim()).filter(Boolean)||[])));
-  const byDirector=toChart(tally(watchedFilms.map(f=>f.director).filter(Boolean)));
-  const byCountry=toChart(tally(watchedFilms.map(f=>f.country).filter(Boolean)));
-
-  const totalOscars=watchedFilms.reduce((s,f)=>s+(Number(f.awards)||0),0);
-  const ratedFilms=watchedFilms.filter(f=>f.imdbRating);
-  const avgRating=ratedFilms.length?(ratedFilms.reduce((s,f)=>s+parseFloat(f.imdbRating),0)/ratedFilms.length).toFixed(1):"-";
-  const topGenre=byGenre[0]?.name||"-";
-  const topDirector=byDirector[0]?.name||"-";
-  const topDecade=[...byDecade].sort((a,b)=>b.films-a.films)[0]?.name||"-";
-  const topForeignCountry=(()=>{const c={};watchedFilms.forEach(f=>{if(f.country&&f.country!=="United States"&&f.country!=="USA")c[f.country]=(c[f.country]||0)+1;});return Object.entries(c).sort((a,b)=>b[1]-a[1])[0]?.[0]||"-";})();
-  const withRuntime=watchedFilms.filter(f=>parseRuntime(f.runtime)>0);
-  const longestFilm=withRuntime.length?withRuntime.reduce((a,b)=>parseRuntime(a.runtime)>parseRuntime(b.runtime)?a:b):null;
-  const shortestFilm=withRuntime.length?withRuntime.reduce((a,b)=>parseRuntime(a.runtime)<parseRuntime(b.runtime)?a:b):null;
-  const mostAwardedDirector=(()=>{const c={};watchedFilms.forEach(f=>{if(f.director&&f.awards>0)c[f.director]=(c[f.director]||0)+Number(f.awards);});return Object.entries(c).sort((a,b)=>b[1]-a[1])[0]||null;})();
+  // Stats via hook
+  const{byDecade,byGenre,byDirector,byCountry,totalOscars,avgRating,topGenre,topDirector,topDecade,topForeignCountry,longestFilm,shortestFilm,mostAwardedDirector}=useStats(watchedFilms);
 
   const tabBtn=(tId,label,count)=>(
     <button onClick={()=>setTab(tId)} style={{padding:"8px 20px",border:"none",borderRadius:8,cursor:"pointer",fontWeight:500,fontSize:13,background:tab===tId?t.accent:t.bgSecondary,color:tab===tId?t.accentText:t.textSecondary,display:"flex",alignItems:"center",gap:6,transition:"all 0.15s"}}>
@@ -1016,6 +1075,14 @@ function AppInner(){
                 {sortBy==="title"?(sortDir==="desc"?"Z → A":"A → Z"):sortBy==="year"?(sortDir==="desc"?"Newer first":"Older first"):(sortDir==="desc"?"Highest first":"Lowest first")}
               </button>
               <span style={{fontSize:12,color:t.textSecondary,marginLeft:"auto"}}>{filtered.length} film{filtered.length!==1?"s":""}</span>
+              {/* Random picker — watchlist only */}
+              {tab==="watchlist"&&filtered.length>0&&(
+                <button
+                  onClick={()=>setSelectedFilm(filtered[Math.floor(Math.random()*filtered.length)])}
+                  title="Pick a random film from your watchlist"
+                  style={{background:t.bgSecondary,border:`1px solid ${t.border}`,borderRadius:6,padding:"5px 10px",cursor:"pointer",color:t.textSecondary,fontSize:12,whiteSpace:"nowrap"}}
+                >🎲 Random</button>
+              )}
               <div style={{display:"flex",gap:4}}>
                 <button onClick={()=>setViewMode("grid")} style={{background:viewMode==="grid"?t.accent:t.bgSecondary,border:`1px solid ${t.border}`,borderRadius:6,padding:"5px 9px",cursor:"pointer",color:viewMode==="grid"?t.accentText:t.textSecondary,fontSize:14,lineHeight:1}}>⊞</button>
                 <button onClick={()=>setViewMode("list")} style={{background:viewMode==="list"?t.accent:t.bgSecondary,border:`1px solid ${t.border}`,borderRadius:6,padding:"5px 9px",cursor:"pointer",color:viewMode==="list"?t.accentText:t.textSecondary,fontSize:14,lineHeight:1}}>☰</button>
@@ -1051,7 +1118,11 @@ function AppInner(){
             onRemove={removeFilm}
             onToggleRewatch={id=>{toggleRewatch(id);setSelectedFilm(f=>({...f,rewatched:!f.rewatched}));}}
             onMoveToWatched={id=>updateFilm(id,{list:"watched"})}
-            onEdit={handleEdit} onShare={setShareFilm} isUnlocked={isUnlocked}
+            onEdit={handleEdit} onShare={setShareFilm}
+            onFindSimilar={handleFindSimilar}
+            onPrev={selectedIdx>0?()=>setSelectedFilm(filtered[selectedIdx-1]):null}
+            onNext={selectedIdx<filtered.length-1?()=>setSelectedFilm(filtered[selectedIdx+1]):null}
+            isUnlocked={isUnlocked}
           />
         )}
         {shareFilm&&<ShareCard film={shareFilm} onClose={()=>setShareFilm(null)}/>}
@@ -1073,8 +1144,20 @@ function AppInner(){
             onClose={()=>setSuggestions(null)}
             onAdd={addFilm}
             existingFilms={films}
+            showToast={showToast}
           />
         )}
+
+        {/* Suggestions loading indicator */}
+        {suggestionsLoading&&(
+          <div style={{position:"fixed",bottom:28,left:"50%",transform:"translateX(-50%)",background:t.bgSecondary,border:`1px solid ${t.border}`,color:t.textSecondary,padding:"10px 18px",borderRadius:10,fontSize:13,zIndex:99998,display:"flex",alignItems:"center",gap:8,boxShadow:"0 4px 20px rgba(0,0,0,0.15)",pointerEvents:"none"}}>
+            ⏳ Finding similar films…
+          </div>
+        )}
+
+        {/* Toast */}
+        {toast&&<Toast message={toast} onDone={()=>setToast(null)}/>}
+
       </div>
     </ThemeContext.Provider>
   );
