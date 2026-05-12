@@ -119,7 +119,6 @@ async function tmdbFetch(path, params={}) {
   return res.json();
 }
 
-// Resolve a TMDB ID for any film — uses stored tmdbId if available, otherwise searches by title+year
 async function fetchTmdbId(film) {
   if (film.tmdbId) return film.tmdbId;
   try {
@@ -186,12 +185,23 @@ function useFilms() {
       setLoading(false);
     })();
   },[]);
+
+  // Optimistic add: film appears instantly, reconciled after Supabase confirms
   const addFilm = async(film)=>{
+    const tempId=`temp_${Date.now()}`;
+    const optimistic={...film,id:tempId,awards:Number(film.awards)||0,created_at:new Date().toISOString()};
+    setFilms(prev=>[optimistic,...prev]);
     if(supabase){
       const{data,error}=await supabase.from("films").insert(filmToRow(film)).select().single();
-      if(!error&&data) setFilms(prev=>[rowToFilm(data),...prev]);
-    } else setFilms(prev=>[{...film,id:Date.now()},...prev]);
+      if(!error&&data){
+        setFilms(prev=>prev.map(f=>f.id===tempId?rowToFilm(data):f));
+      } else {
+        // Rollback on failure
+        setFilms(prev=>prev.filter(f=>f.id!==tempId));
+      }
+    }
   };
+
   const updateFilm = async(id,updates)=>{
     const row={};
     const map={title:"title",year:"year",genre:"genre",director:"director",country:"country",actors:"actors",poster:"poster",plot:"plot",list:"list",rewatched:"rewatched"};
@@ -216,32 +226,21 @@ function useFilms() {
 function useStats(watchedFilms) {
   const tally = arr => arr.reduce((m,k)=>{m[k]=(m[k]||0)+1;return m;},{});
   const toChart = obj => Object.entries(obj).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([name,films])=>({name,films}));
-
   const byDecade = toChart(tally(watchedFilms.map(f=>decadeOf(f.year)).filter(d=>d!=="Unknown"))).sort((a,b)=>a.name.localeCompare(b.name));
   const byGenre = toChart(tally(watchedFilms.flatMap(f=>f.genre?.split(",").map(g=>g.trim()).filter(Boolean)||[])));
   const byDirector = toChart(tally(watchedFilms.map(f=>f.director).filter(Boolean)));
   const byCountry = toChart(tally(watchedFilms.map(f=>f.country).filter(Boolean)));
-
   const totalOscars = watchedFilms.reduce((s,f)=>s+(Number(f.awards)||0),0);
   const ratedFilms = watchedFilms.filter(f=>f.imdbRating);
   const avgRating = ratedFilms.length?(ratedFilms.reduce((s,f)=>s+parseFloat(f.imdbRating),0)/ratedFilms.length).toFixed(1):"-";
   const topGenre = byGenre[0]?.name||"-";
   const topDirector = byDirector[0]?.name||"-";
   const topDecade = [...byDecade].sort((a,b)=>b.films-a.films)[0]?.name||"-";
-  const topForeignCountry = (()=>{
-    const c={};
-    watchedFilms.forEach(f=>{if(f.country&&f.country!=="United States"&&f.country!=="USA")c[f.country]=(c[f.country]||0)+1;});
-    return Object.entries(c).sort((a,b)=>b[1]-a[1])[0]?.[0]||"-";
-  })();
+  const topForeignCountry = (()=>{const c={};watchedFilms.forEach(f=>{if(f.country&&f.country!=="United States"&&f.country!=="USA")c[f.country]=(c[f.country]||0)+1;});return Object.entries(c).sort((a,b)=>b[1]-a[1])[0]?.[0]||"-";})();
   const withRuntime = watchedFilms.filter(f=>parseRuntime(f.runtime)>0);
   const longestFilm = withRuntime.length?withRuntime.reduce((a,b)=>parseRuntime(a.runtime)>parseRuntime(b.runtime)?a:b):null;
   const shortestFilm = withRuntime.length?withRuntime.reduce((a,b)=>parseRuntime(a.runtime)<parseRuntime(b.runtime)?a:b):null;
-  const mostAwardedDirector = (()=>{
-    const c={};
-    watchedFilms.forEach(f=>{if(f.director&&f.awards>0)c[f.director]=(c[f.director]||0)+Number(f.awards);});
-    return Object.entries(c).sort((a,b)=>b[1]-a[1])[0]||null;
-  })();
-
+  const mostAwardedDirector = (()=>{const c={};watchedFilms.forEach(f=>{if(f.director&&f.awards>0)c[f.director]=(c[f.director]||0)+Number(f.awards);});return Object.entries(c).sort((a,b)=>b[1]-a[1])[0]||null;})();
   return {byDecade,byGenre,byDirector,byCountry,totalOscars,avgRating,topGenre,topDirector,topDecade,topForeignCountry,longestFilm,shortestFilm,mostAwardedDirector};
 }
 
@@ -267,13 +266,7 @@ function Toast({message,onDone}){
     return()=>{clearTimeout(t1);clearTimeout(t2);};
   },[]);
   return(
-    <div style={{
-      position:"fixed",bottom:28,left:"50%",transform:"translateX(-50%)",
-      background:t.accent,color:t.accentText,padding:"11px 20px",
-      borderRadius:10,fontSize:13,fontWeight:500,zIndex:99999,
-      boxShadow:"0 4px 24px rgba(0,0,0,0.25)",whiteSpace:"nowrap",
-      pointerEvents:"none",opacity:vis?1:0,transition:"opacity 0.35s ease",
-    }}>
+    <div style={{position:"fixed",bottom:28,left:"50%",transform:"translateX(-50%)",background:t.accent,color:t.accentText,padding:"11px 20px",borderRadius:10,fontSize:13,fontWeight:500,zIndex:99999,boxShadow:"0 4px 24px rgba(0,0,0,0.25)",whiteSpace:"nowrap",pointerEvents:"none",opacity:vis?1:0,transition:"opacity 0.35s ease"}}>
       {message}
     </div>
   );
@@ -285,30 +278,13 @@ function ThemeToggle({ themeId, onChange }) {
   const cur = THEMES[themeId];
   const toggleMode = () => onChange(`${cur.mode === "dark" ? "light" : "dark"}-${cur.hue}`);
   const toggleHue  = () => onChange(`${cur.mode}-${cur.hue === "violet" ? "blue" : "violet"}`);
-
   const Switch = ({ checked, onToggle, iconOff, iconOn, title }) => (
-    <button
-      onClick={onToggle}
-      title={title}
-      style={{
-        position: "relative", width: 44, height: 24, borderRadius: 12,
-        border: `1px solid ${t.border}`, cursor: "pointer", flexShrink: 0,
-        padding: 0, background: checked ? t.accent : t.bgSecondary,
-        transition: "background 0.2s, border-color 0.2s",
-      }}
-    >
-      <span style={{
-        position: "absolute", top: 2, left: checked ? 21 : 2,
-        width: 18, height: 18, borderRadius: "50%", background: "#fff",
-        transition: "left 0.2s", display: "flex", alignItems: "center",
-        justifyContent: "center", fontSize: 10, lineHeight: 1,
-        boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
-      }}>
-        {checked ? iconOn : iconOff}
+    <button onClick={onToggle} title={title} style={{position:"relative",width:44,height:24,borderRadius:12,border:`1px solid ${t.border}`,cursor:"pointer",flexShrink:0,padding:0,background:checked?t.accent:t.bgSecondary,transition:"background 0.2s, border-color 0.2s"}}>
+      <span style={{position:"absolute",top:2,left:checked?21:2,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left 0.2s",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,lineHeight:1,boxShadow:"0 1px 3px rgba(0,0,0,0.3)"}}>
+        {checked?iconOn:iconOff}
       </span>
     </button>
   );
-
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <Switch checked={cur.mode==="dark"} onToggle={toggleMode} iconOff="☀️" iconOn="🌙" title={cur.mode==="dark"?"Switch to light mode":"Switch to dark mode"}/>
@@ -335,9 +311,7 @@ function EmptyState({isWatchlist,onAdd,isUnlocked}){
         {isWatchlist?"Add films you want to watch and they'll appear here.":"Start building your personal film archive."}
       </div>
       {isUnlocked&&(
-        <button onClick={onAdd} style={{background:t.accent,color:t.accentText,border:"none",borderRadius:8,padding:"10px 24px",fontWeight:500,cursor:"pointer",fontSize:14}}>
-          + Add your first film
-        </button>
+        <button onClick={onAdd} style={{background:t.accent,color:t.accentText,border:"none",borderRadius:8,padding:"10px 24px",fontWeight:500,cursor:"pointer",fontSize:14}}>+ Add your first film</button>
       )}
     </div>
   );
@@ -355,13 +329,46 @@ function StatCard({label,value,sub}){
   );
 }
 
+// ─── Recently Added Strip ─────────────────────────────────────────────────────
+function RecentlyAdded({films,onSelect}){
+  const t=useT();
+  if(!films.length) return null;
+  return(
+    <div style={{marginBottom:"1.75rem"}}>
+      <div style={{fontSize:12,color:t.textMuted,textTransform:"uppercase",letterSpacing:1,marginBottom:"0.6rem"}}>Recently added</div>
+      <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:4}}>
+        {films.map(film=>(
+          <div key={film.id} onClick={()=>onSelect(film)} style={{flexShrink:0,width:90,cursor:"pointer",borderRadius:8,overflow:"hidden",border:`1px solid ${Number(film.awards)>0?"#f5c518":t.border}`,background:t.bgSecondary,boxShadow:Number(film.awards)>0?"0 0 10px rgba(245,197,24,0.18)":"none",transition:"transform 0.15s, border-color 0.15s"}}
+            onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";}}
+            onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";}}
+          >
+            <div style={{position:"relative",height:130,background:t.bgTertiary,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              {film.poster&&film.poster!=="N/A"
+                ?<img src={film.poster} alt={film.title} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={e=>e.target.style.display="none"}/>
+                :<span style={{fontSize:24,opacity:.3}}>🎬</span>}
+              {Number(film.awards)>0&&(
+                <div style={{position:"absolute",top:5,right:5,background:"rgba(0,0,0,0.7)",borderRadius:5,padding:"2px 5px",fontSize:10,color:"#f5c518",fontWeight:600}}>🏆 {film.awards}</div>
+              )}
+            </div>
+            <div style={{padding:"6px 7px 8px"}}>
+              <div style={{fontSize:11,fontWeight:500,color:t.textPrimary,lineHeight:1.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{film.title}</div>
+              <div style={{fontSize:10,color:t.textSecondary,marginTop:1}}>{film.year}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Film Card ────────────────────────────────────────────────────────────────
 function FilmCard({film,onSelect}){
   const t=useT();
+  const isOscarWinner=Number(film.awards)>0;
   return(
-    <div onClick={()=>onSelect(film)} style={{cursor:"pointer",borderRadius:10,overflow:"hidden",border:`1px solid ${t.border}`,background:t.bgSecondary,display:"flex",flexDirection:"column",transition:"transform 0.15s, border-color 0.15s"}}
-      onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.borderColor=t.accent;}}
-      onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.borderColor=t.border;}}
+    <div onClick={()=>onSelect(film)} style={{cursor:"pointer",borderRadius:10,overflow:"hidden",border:`1px solid ${isOscarWinner?"#f5c518":t.border}`,background:t.bgSecondary,display:"flex",flexDirection:"column",transition:"transform 0.15s, border-color 0.15s",boxShadow:isOscarWinner?"0 0 14px rgba(245,197,24,0.15)":"none"}}
+      onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.borderColor=isOscarWinner?"#f5c518":t.accent;}}
+      onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.borderColor=isOscarWinner?"#f5c518":t.border;}}
     >
       <div style={{height:210,background:t.bgTertiary,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
         {film.poster&&film.poster!=="N/A"
@@ -369,12 +376,12 @@ function FilmCard({film,onSelect}){
           :<span style={{fontSize:36,opacity:.4}}>🎬</span>}
         {film.rewatched&&<div style={{position:"absolute",top:8,right:8,background:t.greenBg,color:t.green,fontSize:10,borderRadius:6,padding:"2px 7px"}}>↩ Rewatched</div>}
         {film.list==="watchlist"&&<div style={{position:"absolute",top:8,left:8,background:t.purpleBg,color:t.purple,fontSize:10,borderRadius:6,padding:"2px 7px"}}>🔖 Watchlist</div>}
+        {isOscarWinner&&<div style={{position:"absolute",bottom:8,right:8,background:"rgba(0,0,0,0.72)",borderRadius:6,padding:"2px 8px",fontSize:11,color:"#f5c518",fontWeight:600}}>🏆 {film.awards} Oscar{Number(film.awards)>1?"s":""}</div>}
       </div>
       <div style={{padding:"10px 12px 12px"}}>
         <div style={{fontWeight:500,fontSize:13,color:t.textPrimary,lineHeight:1.3,marginBottom:3}}>{film.title}</div>
         <div style={{fontSize:11,color:t.textSecondary}}>{film.year} · {film.genre?.split(",")[0]}</div>
         {film.imdbRating&&<div style={{fontSize:11,color:t.goldText,marginTop:2}}>⭐ {film.imdbRating}/10</div>}
-        {film.awards>0&&<div style={{marginTop:6,fontSize:10,background:t.goldBg,color:t.goldText,borderRadius:6,display:"inline-block",padding:"2px 8px"}}>★ {film.awards} Oscar{film.awards>1?"s":""}</div>}
       </div>
     </div>
   );
@@ -383,10 +390,11 @@ function FilmCard({film,onSelect}){
 // ─── Film List Row ────────────────────────────────────────────────────────────
 function FilmListRow({film,onSelect}){
   const t=useT();
+  const isOscarWinner=Number(film.awards)>0;
   return(
-    <div onClick={()=>onSelect(film)} style={{cursor:"pointer",display:"flex",alignItems:"center",gap:12,padding:"8px 10px",borderRadius:8,border:`1px solid ${t.border}`,background:t.bgSecondary,transition:"border-color 0.15s, background 0.15s"}}
-      onMouseEnter={e=>{e.currentTarget.style.borderColor=t.accent;e.currentTarget.style.background=t.bgHover;}}
-      onMouseLeave={e=>{e.currentTarget.style.borderColor=t.border;e.currentTarget.style.background=t.bgSecondary;}}
+    <div onClick={()=>onSelect(film)} style={{cursor:"pointer",display:"flex",alignItems:"center",gap:12,padding:"8px 10px",borderRadius:8,border:`1px solid ${isOscarWinner?"#f5c518":t.border}`,background:t.bgSecondary,transition:"border-color 0.15s, background 0.15s",boxShadow:isOscarWinner?"0 0 10px rgba(245,197,24,0.1)":"none"}}
+      onMouseEnter={e=>{e.currentTarget.style.borderColor=isOscarWinner?"#f5c518":t.accent;e.currentTarget.style.background=t.bgHover;}}
+      onMouseLeave={e=>{e.currentTarget.style.borderColor=isOscarWinner?"#f5c518":t.border;e.currentTarget.style.background=t.bgSecondary;}}
     >
       <div style={{width:40,height:60,borderRadius:5,overflow:"hidden",flexShrink:0,background:t.bgTertiary,display:"flex",alignItems:"center",justifyContent:"center"}}>
         {film.poster&&film.poster!=="N/A"
@@ -401,7 +409,7 @@ function FilmListRow({film,onSelect}){
       </div>
       <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4,flexShrink:0}}>
         {film.imdbRating&&<div style={{fontSize:12,color:t.goldText}}>⭐ {film.imdbRating}</div>}
-        {film.awards>0&&<div style={{fontSize:11,background:t.goldBg,color:t.goldText,borderRadius:6,padding:"1px 7px"}}>★ {film.awards}</div>}
+        {isOscarWinner&&<div style={{fontSize:11,background:t.goldBg,color:t.goldText,borderRadius:6,padding:"1px 7px"}}>🏆 {film.awards}</div>}
         {film.rewatched&&<div style={{fontSize:10,background:t.greenBg,color:t.green,borderRadius:6,padding:"1px 7px"}}>↩</div>}
         {film.list==="watchlist"&&<div style={{fontSize:10,background:t.purpleBg,color:t.purple,borderRadius:6,padding:"1px 7px"}}>🔖</div>}
       </div>
@@ -416,73 +424,28 @@ function ShareCard({film,onClose}){
   const[generating,setGenerating]=useState(true);
   const[ready,setReady]=useState(false);
   const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent);
-
-  const loadImage=(src)=>new Promise((res,rej)=>{
-    const img=new Image();img.crossOrigin="anonymous";
-    img.onload=()=>res(img);img.onerror=rej;img.src=src;
-  });
+  const loadImage=(src)=>new Promise((res,rej)=>{const img=new Image();img.crossOrigin="anonymous";img.onload=()=>res(img);img.onerror=rej;img.src=src;});
   const proxyUrl=(url)=>url?`${PROXY}/image?url=${encodeURIComponent(url)}`:null;
-
   useEffect(()=>{
     (async()=>{
-      const canvas=canvasRef.current;
-      const ctx=canvas.getContext("2d");
-      const W=1080,H=1920;
+      const canvas=canvasRef.current;const ctx=canvas.getContext("2d");const W=1080,H=1920;
       canvas.width=W;canvas.height=H;
-      const bg=ctx.createLinearGradient(0,0,0,H);
-      bg.addColorStop(0,"#0a0a18");bg.addColorStop(1,"#12122a");
-      ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
-      if(film.poster){
-        try{
-          const bgImg=await loadImage(proxyUrl(film.poster));
-          if(!isIOS){ctx.save();ctx.filter="blur(40px) brightness(0.25)";ctx.drawImage(bgImg,-60,-60,W+120,H+120);ctx.restore();}
-          else{ctx.save();ctx.globalAlpha=0.15;ctx.drawImage(bgImg,0,0,W,H);ctx.restore();}
-        }catch{}
-      }
-      const ov=ctx.createLinearGradient(0,0,0,H);
-      ov.addColorStop(0,"rgba(0,0,0,0.5)");ov.addColorStop(0.5,"rgba(0,0,0,0.3)");ov.addColorStop(1,"rgba(0,0,0,0.8)");
-      ctx.fillStyle=ov;ctx.fillRect(0,0,W,H);
+      const bg=ctx.createLinearGradient(0,0,0,H);bg.addColorStop(0,"#0a0a18");bg.addColorStop(1,"#12122a");ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+      if(film.poster){try{const bgImg=await loadImage(proxyUrl(film.poster));if(!isIOS){ctx.save();ctx.filter="blur(40px) brightness(0.25)";ctx.drawImage(bgImg,-60,-60,W+120,H+120);ctx.restore();}else{ctx.save();ctx.globalAlpha=0.15;ctx.drawImage(bgImg,0,0,W,H);ctx.restore();}}catch{}}
+      const ov=ctx.createLinearGradient(0,0,0,H);ov.addColorStop(0,"rgba(0,0,0,0.5)");ov.addColorStop(0.5,"rgba(0,0,0,0.3)");ov.addColorStop(1,"rgba(0,0,0,0.8)");ctx.fillStyle=ov;ctx.fillRect(0,0,W,H);
       const PW=640,PH=960,PX=(W-640)/2,PY=(H-960)/2-120;
-      if(film.poster){
-        try{
-          const pi=await loadImage(proxyUrl(film.poster));
-          const r=24;ctx.save();ctx.beginPath();
-          ctx.moveTo(PX+r,PY);ctx.lineTo(PX+PW-r,PY);ctx.quadraticCurveTo(PX+PW,PY,PX+PW,PY+r);
-          ctx.lineTo(PX+PW,PY+PH-r);ctx.quadraticCurveTo(PX+PW,PY+PH,PX+PW-r,PY+PH);
-          ctx.lineTo(PX+r,PY+PH);ctx.quadraticCurveTo(PX,PY+PH,PX,PY+PH-r);
-          ctx.lineTo(PX,PY+r);ctx.quadraticCurveTo(PX,PY,PX+r,PY);ctx.closePath();
-          ctx.clip();ctx.drawImage(pi,PX,PY,PW,PH);ctx.restore();
-          ctx.save();ctx.strokeStyle="rgba(255,255,255,0.08)";ctx.lineWidth=2;ctx.beginPath();
-          ctx.moveTo(PX+r,PY);ctx.lineTo(PX+PW-r,PY);ctx.quadraticCurveTo(PX+PW,PY,PX+PW,PY+r);
-          ctx.lineTo(PX+PW,PY+PH-r);ctx.quadraticCurveTo(PX+PW,PY+PH,PX+PW-r,PY+PH);
-          ctx.lineTo(PX+r,PY+PH);ctx.quadraticCurveTo(PX,PY+PH,PX,PY+PH-r);
-          ctx.lineTo(PX,PY+r);ctx.quadraticCurveTo(PX,PY,PX+r,PY);ctx.closePath();ctx.stroke();ctx.restore();
-        }catch{}
-      }
-      const tY=PY+PH+70;ctx.textAlign="center";
-      ctx.font="bold 64px sans-serif";ctx.fillStyle="#ffffff";
-      let title=film.title;const maxW=W-120;
-      while(ctx.measureText(title+"…").width>maxW&&title.length>0)title=title.slice(0,-1);
-      if(title!==film.title)title+="…";
-      ctx.fillText(title,W/2,tY);
-      const meta=[film.year,film.genre?.split(",")[0]].filter(Boolean).join(" · ");
-      ctx.font="36px sans-serif";ctx.fillStyle="rgba(255,255,255,0.55)";ctx.fillText(meta,W/2,tY+72);
-      let eY=0;
-      if(film.imdbRating){ctx.font="bold 42px sans-serif";ctx.fillStyle="#f5c518";ctx.fillText(`⭐ ${film.imdbRating} / 10  IMDb`,W/2,tY+152);eY=60;}
+      if(film.poster){try{const pi=await loadImage(proxyUrl(film.poster));const r=24;ctx.save();ctx.beginPath();ctx.moveTo(PX+r,PY);ctx.lineTo(PX+PW-r,PY);ctx.quadraticCurveTo(PX+PW,PY,PX+PW,PY+r);ctx.lineTo(PX+PW,PY+PH-r);ctx.quadraticCurveTo(PX+PW,PY+PH,PX+PW-r,PY+PH);ctx.lineTo(PX+r,PY+PH);ctx.quadraticCurveTo(PX,PY+PH,PX,PY+PH-r);ctx.lineTo(PX,PY+r);ctx.quadraticCurveTo(PX,PY,PX+r,PY);ctx.closePath();ctx.clip();ctx.drawImage(pi,PX,PY,PW,PH);ctx.restore();ctx.save();ctx.strokeStyle="rgba(255,255,255,0.08)";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(PX+r,PY);ctx.lineTo(PX+PW-r,PY);ctx.quadraticCurveTo(PX+PW,PY,PX+PW,PY+r);ctx.lineTo(PX+PW,PY+PH-r);ctx.quadraticCurveTo(PX+PW,PY+PH,PX+PW-r,PY+PH);ctx.lineTo(PX+r,PY+PH);ctx.quadraticCurveTo(PX,PY+PH,PX,PY+PH-r);ctx.lineTo(PX,PY+r);ctx.quadraticCurveTo(PX,PY,PX+r,PY);ctx.closePath();ctx.stroke();ctx.restore();}catch{}}
+      const tY=PY+PH+70;ctx.textAlign="center";ctx.font="bold 64px sans-serif";ctx.fillStyle="#ffffff";
+      let title=film.title;const maxW=W-120;while(ctx.measureText(title+"…").width>maxW&&title.length>0)title=title.slice(0,-1);if(title!==film.title)title+="…";ctx.fillText(title,W/2,tY);
+      const meta=[film.year,film.genre?.split(",")[0]].filter(Boolean).join(" · ");ctx.font="36px sans-serif";ctx.fillStyle="rgba(255,255,255,0.55)";ctx.fillText(meta,W/2,tY+72);
+      let eY=0;if(film.imdbRating){ctx.font="bold 42px sans-serif";ctx.fillStyle="#f5c518";ctx.fillText(`⭐ ${film.imdbRating} / 10  IMDb`,W/2,tY+152);eY=60;}
       if(film.awards>0){ctx.font="36px sans-serif";ctx.fillStyle="#f5c518";ctx.fillText(`★ ${film.awards} Oscar${film.awards>1?"s":""}`,W/2,tY+152+eY);}
-      ctx.strokeStyle="rgba(255,255,255,0.15)";ctx.lineWidth=1;ctx.beginPath();
-      ctx.moveTo(W/2-120,H-160);ctx.lineTo(W/2+120,H-160);ctx.stroke();
+      ctx.strokeStyle="rgba(255,255,255,0.15)";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(W/2-120,H-160);ctx.lineTo(W/2+120,H-160);ctx.stroke();
       ctx.font="32px sans-serif";ctx.fillStyle="rgba(255,255,255,0.35)";ctx.fillText("My Film Collection",W/2,H-110);
       setGenerating(false);setReady(true);
     })();
   },[]);
-
-  const download=()=>{
-    const dataUrl=canvasRef.current.toDataURL("image/png");
-    if(isIOS){const w=window.open();w.document.write(`<img src="${dataUrl}" style="max-width:100%"/>`);w.document.title=film.title;}
-    else{const l=document.createElement("a");l.download=`${film.title.replace(/[^a-z0-9]/gi,"_")}_share.png`;l.href=dataUrl;l.click();}
-  };
-
+  const download=()=>{const dataUrl=canvasRef.current.toDataURL("image/png");if(isIOS){const w=window.open();w.document.write(`<img src="${dataUrl}" style="max-width:100%"/>`);w.document.title=film.title;}else{const l=document.createElement("a");l.download=`${film.title.replace(/[^a-z0-9]/gi,"_")}_share.png`;l.href=dataUrl;l.click();}};
   return(
     <Fade>
       <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",zIndex:10000,padding:"1rem"}} onClick={onClose}>
@@ -505,32 +468,19 @@ function FilmDetailModal({film,onClose,onRemove,onToggleRewatch,onMoveToWatched,
   const t=useT();
   const isLight=t.mode==="light";
   const[confirmRemove,setConfirmRemove]=useState(false);
-
-  const backdropGradient=isLight
-    ?`linear-gradient(to bottom, rgba(255,255,255,0) 10%, ${t.bgModal} 85%)`
-    :`linear-gradient(to bottom, transparent 40%, ${t.bgModal} 100%)`;
-
+  const backdropGradient=isLight?`linear-gradient(to bottom, rgba(255,255,255,0) 10%, ${t.bgModal} 85%)`:`linear-gradient(to bottom, transparent 40%, ${t.bgModal} 100%)`;
   const navBtn={background:"rgba(0,0,0,0.55)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:"50%",width:36,height:36,color:"#fff",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"};
-
   return(
     <Fade>
       <div style={{position:"fixed",inset:0,background:t.bgModal,zIndex:9999,overflowY:"auto"}} onClick={onClose}>
         <div onClick={e=>e.stopPropagation()} style={{maxWidth:860,margin:"0 auto",paddingBottom:"3rem",background:t.bgModal,minHeight:"100%"}}>
-
-          {/* Backdrop */}
           <div style={{position:"relative",height:320,background:t.bgTertiary,overflow:"hidden"}}>
-            {film.backdrop
-              ?<img src={film.backdrop} alt="" style={{width:"100%",height:"100%",objectFit:"cover",opacity:isLight?0.75:0.6}}/>
-              :film.poster?<img src={film.poster} alt="" style={{width:"100%",height:"100%",objectFit:"cover",filter:`blur(18px) brightness(${isLight?0.65:0.4})`,transform:"scale(1.1)"}}/>:null}
+            {film.backdrop?<img src={film.backdrop} alt="" style={{width:"100%",height:"100%",objectFit:"cover",opacity:isLight?0.75:0.6}}/>:film.poster?<img src={film.poster} alt="" style={{width:"100%",height:"100%",objectFit:"cover",filter:`blur(18px) brightness(${isLight?0.65:0.4})`,transform:"scale(1.1)"}}/>:null}
             <div style={{position:"absolute",inset:0,background:backdropGradient}}/>
-            {/* Prev / Next */}
-            {onPrev&&<button onClick={e=>{e.stopPropagation();onPrev();}} style={{...navBtn,position:"absolute",top:16,left:16}} title="Previous film (←)">‹</button>}
-            {onNext&&<button onClick={e=>{e.stopPropagation();onNext();}} style={{...navBtn,position:"absolute",top:16,left:onPrev?60:16}} title="Next film (→)">›</button>}
-            {/* Close */}
+            {onPrev&&<button onClick={e=>{e.stopPropagation();onPrev();}} style={{...navBtn,position:"absolute",top:16,left:16}} title="Previous (←)">‹</button>}
+            {onNext&&<button onClick={e=>{e.stopPropagation();onNext();}} style={{...navBtn,position:"absolute",top:16,left:onPrev?60:16}} title="Next (→)">›</button>}
             <button onClick={onClose} style={{...navBtn,position:"absolute",top:16,right:16}} title="Close (Esc)">×</button>
           </div>
-
-          {/* Content */}
           <div style={{padding:"0 1.5rem",marginTop:-80,position:"relative"}}>
             <div style={{display:"flex",gap:20,alignItems:"flex-end",marginBottom:"1.5rem"}}>
               {film.poster&&<img src={film.poster} alt={film.title} style={{width:120,borderRadius:10,boxShadow:"0 8px 32px rgba(0,0,0,0.35)",flexShrink:0}}/>}
@@ -542,26 +492,17 @@ function FilmDetailModal({film,onClose,onRemove,onToggleRewatch,onMoveToWatched,
                 </div>
               </div>
             </div>
-
-            {/* Ratings */}
             <div style={{display:"flex",gap:16,marginBottom:"1.5rem",flexWrap:"wrap"}}>
               {film.imdbRating&&<div style={{background:t.bgSecondary,borderRadius:8,padding:"10px 16px",border:`1px solid ${t.border}`,textAlign:"center"}}><div style={{fontSize:11,color:t.textMuted,marginBottom:2}}>IMDb</div><div style={{fontSize:18,fontWeight:600,color:t.goldText}}>⭐ {film.imdbRating}</div></div>}
-              {film.awards>0&&<div style={{background:t.bgSecondary,borderRadius:8,padding:"10px 16px",border:`1px solid ${t.border}`,textAlign:"center"}}><div style={{fontSize:11,color:t.textMuted,marginBottom:2}}>Oscars</div><div style={{fontSize:18,fontWeight:600,color:t.goldText}}>★ {film.awards}</div></div>}
+              {Number(film.awards)>0&&<div style={{background:t.goldBg,borderRadius:8,padding:"10px 16px",border:"1px solid #f5c518",textAlign:"center"}}><div style={{fontSize:11,color:t.goldText,marginBottom:2}}>Oscars won</div><div style={{fontSize:18,fontWeight:600,color:t.goldText}}>🏆 {film.awards}</div></div>}
               {film.rewatched&&<div style={{background:t.greenBg,borderRadius:8,padding:"10px 16px",border:`1px solid ${t.greenBorder}`,textAlign:"center"}}><div style={{fontSize:11,color:t.green,marginBottom:2}}>Status</div><div style={{fontSize:14,fontWeight:600,color:t.green}}>↩ Rewatched</div></div>}
             </div>
-
-            {/* Plot */}
             {film.plot&&<div style={{marginBottom:"1.5rem"}}><div style={{fontSize:12,color:t.textMuted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Plot</div><div style={{fontSize:14,color:t.textSecondary,lineHeight:1.7}}>{film.plot}</div></div>}
-
-            {/* Director / Cast */}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:"1.5rem"}}>
               {film.director&&<div><div style={{fontSize:12,color:t.textMuted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Director</div><div style={{fontSize:14,color:t.textPrimary}}>{film.director}</div></div>}
               {film.actors&&<div><div style={{fontSize:12,color:t.textMuted,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Cast</div><div style={{fontSize:13,color:t.textSecondary,lineHeight:1.6}}>{film.actors.split(",").map(a=>a.trim()).join(" · ")}</div></div>}
             </div>
-
-            {/* Actions */}
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              {/* Find similar — always visible */}
               <button onClick={()=>{onFindSimilar(film);onClose();}} style={{fontSize:13,color:t.purple,background:"none",border:`1px solid ${t.purpleBorder}`,borderRadius:8,padding:"8px 16px",cursor:"pointer"}}>🎬 Find similar</button>
               {isUnlocked&&(
                 <>
@@ -640,11 +581,8 @@ function AddModal({onClose,onAdd,onUpdate,existingFilms,editFilm}){
   const doSearch=async()=>{
     const q=query.trim().slice(0,100);const y=yearQuery.trim().slice(0,4).replace(/\D/g,"");const d=directorQuery.trim().slice(0,100);
     if(!q)return;setLoading(true);setErr("");
-    try{
-      const results=await searchFilms(q,y,d,setStatus);
-      if(!results.length){setErr("No results found. Try different terms or fill in manually.");setForm(f=>({...f,title:query,year:yearQuery,director:directorQuery}));setStep("edit");}
-      else{setCandidates(results);setStep("confirm");}
-    }catch(e){setErr(`Search error: ${e.message}`);}
+    try{const results=await searchFilms(q,y,d,setStatus);if(!results.length){setErr("No results found. Try different terms or fill in manually.");setForm(f=>({...f,title:query,year:yearQuery,director:directorQuery}));setStep("edit");}else{setCandidates(results);setStep("confirm");}}
+    catch(e){setErr(`Search error: ${e.message}`);}
     setStatus("");setLoading(false);
   };
 
@@ -727,10 +665,7 @@ function AddModal({onClose,onAdd,onUpdate,existingFilms,editFilm}){
               <div style={{fontSize:12,color:t.textSecondary,marginBottom:"0.75rem",lineHeight:1.5}}>{isEdit?"Update any field and save.":"Review all fields before saving."}</div>
               {err&&<div style={{fontSize:12,color:t.red,marginBottom:8}}>{err}</div>}
               <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                {form.poster
-                  ?<div style={{textAlign:"center"}}><img src={form.poster} alt="poster" style={{height:170,borderRadius:8,objectFit:"cover"}} onError={e=>e.target.style.display="none"}/></div>
-                  :<div style={{textAlign:"center",padding:"1rem",color:t.textMuted,fontSize:12,border:`1px dashed ${t.border}`,borderRadius:8}}>No poster found — paste a URL below</div>
-                }
+                {form.poster?<div style={{textAlign:"center"}}><img src={form.poster} alt="poster" style={{height:170,borderRadius:8,objectFit:"cover"}} onError={e=>e.target.style.display="none"}/></div>:<div style={{textAlign:"center",padding:"1rem",color:t.textMuted,fontSize:12,border:`1px dashed ${t.border}`,borderRadius:8}}>No poster found — paste a URL below</div>}
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                   <Field label="Title" k="title"/><Field label="Year" k="year"/>
                   <Field label="Genre" k="genre"/><Field label="Director" k="director"/>
@@ -761,10 +696,7 @@ function SuggestionsModal({data,onClose,onAdd,existingFilms,showToast}){
   const t=useT();
   const[addToWatchlist,setAddToWatchlist]=useState(false);
   const[loadingId,setLoadingId]=useState(null);
-
-  const isDup=(title,year)=>existingFilms.some(f=>
-    f.title.trim().toLowerCase()===title.trim().toLowerCase()&&f.year===String(year)
-  );
+  const isDup=(title,year)=>existingFilms.some(f=>f.title.trim().toLowerCase()===title.trim().toLowerCase()&&f.year===String(year));
   const[picks,setPicks]=useState(()=>data.picks.filter(p=>!isDup(p.title,p.year)));
 
   const handlePick=async(film)=>{
@@ -772,13 +704,9 @@ function SuggestionsModal({data,onClose,onAdd,existingFilms,showToast}){
     setLoadingId(film.tmdbId);
     try{
       const details=await getDetails({tmdb_id:film.tmdbId,poster_path:null,overview:""},"");
-      const dup=existingFilms.find(f=>
-        (details.imdbId&&f.imdbId&&details.imdbId===f.imdbId)||
-        (f.title.trim().toLowerCase()===details.title.trim().toLowerCase()&&f.year===details.year)
-      );
-      if(dup){
-        setPicks(prev=>prev.filter(p=>p.tmdbId!==film.tmdbId));
-      } else {
+      const dup=existingFilms.find(f=>(details.imdbId&&f.imdbId&&details.imdbId===f.imdbId)||(f.title.trim().toLowerCase()===details.title.trim().toLowerCase()&&f.year===details.year));
+      if(dup){setPicks(prev=>prev.filter(p=>p.tmdbId!==film.tmdbId));}
+      else{
         await onAdd({...details,awards:Number(details.awards)||0,rewatched:false,list:addToWatchlist?"watchlist":"watched"});
         setPicks(prev=>prev.filter(p=>p.tmdbId!==film.tmdbId));
         showToast(`"${details.title}" added to ${addToWatchlist?"watchlist":"collection"}`);
@@ -860,7 +788,17 @@ function AppInner(){
   const[showAdd,setShowAdd]=useState(false);
   const[showPassword,setShowPassword]=useState(false);
   const[pendingAction,setPendingAction]=useState(null);
-  const[isUnlocked,setIsUnlocked]=useState(!APP_PASSWORD);
+
+  // Session-persistent unlock: survives refresh, cleared when tab closes
+  const[isUnlocked,setIsUnlocked]=useState(()=>{
+    if(!APP_PASSWORD) return true;
+    try{return sessionStorage.getItem("mfc_unlocked")==="1";}catch{return false;}
+  });
+  const unlock=()=>{
+    setIsUnlocked(true);
+    try{sessionStorage.setItem("mfc_unlocked","1");}catch{}
+  };
+
   const[search,setSearch]=useState("");
   const[filterGenre,setFilterGenre]=useState("All");
   const[filterDecade,setFilterDecade]=useState("All");
@@ -877,6 +815,14 @@ function AppInner(){
   const[suggestionsLoading,setSuggestionsLoading]=useState(false);
   const[toast,setToast]=useState(null);
 
+  // Scroll position memory
+  const scrollRef=useRef(0);
+  const openFilm=(film)=>{scrollRef.current=window.scrollY;setSelectedFilm(film);};
+  const closeFilm=()=>{setSelectedFilm(null);};
+  useEffect(()=>{
+    if(!selectedFilm) window.scrollTo({top:scrollRef.current,behavior:"instant"});
+  },[selectedFilm]);
+
   const showToast=(msg)=>setToast(msg);
 
   useEffect(()=>{setPage(1);},[tab,search,filterGenre,filterDecade,filterDirector,filterCountry,sortBy,sortDir]);
@@ -888,17 +834,11 @@ function AppInner(){
   const handleAddClick=()=>requireUnlock(()=>setShowAdd(true));
   const handleEdit=(film)=>requireUnlock(()=>setEditFilm(film));
 
-  // Fetch recommendations and show suggestions modal
   const fetchSuggestions=async(tmdbId,basedOn)=>{
     setSuggestionsLoading(true);
     try{
       const d=await tmdbFetch(`/movie/${tmdbId}/recommendations`);
-      const picks=(d.results||[]).slice(0,6).map(r=>({
-        tmdbId:String(r.id),
-        title:r.title,
-        year:r.release_date?.slice(0,4)||"?",
-        poster:r.poster_path?`${TMDB_IMG}${r.poster_path}`:null,
-      }));
+      const picks=(d.results||[]).slice(0,6).map(r=>({tmdbId:String(r.id),title:r.title,year:r.release_date?.slice(0,4)||"?",poster:r.poster_path?`${TMDB_IMG}${r.poster_path}`:null}));
       if(picks.length) setSuggestions({basedOn,picks});
     }catch{}
     setSuggestionsLoading(false);
@@ -917,6 +857,12 @@ function AppInner(){
   const watchedFilms=films.filter(f=>f.list!=="watchlist");
   const watchlistFilms=films.filter(f=>f.list==="watchlist");
   const activeFilms=tab==="watchlist"?watchlistFilms:watchedFilms;
+
+  // Recently added: last 3 watched films by created_at, excluding optimistic temp entries
+  const recentlyAdded=[...watchedFilms]
+    .filter(f=>!String(f.id).startsWith("temp_"))
+    .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))
+    .slice(0,3);
 
   const sortAlpha=(a,b)=>a==="All"?-1:b==="All"?1:a.localeCompare(b);
   const allGenres=["All",...new Set(activeFilms.flatMap(f=>f.genre?.split(",").map(g=>g.trim()).filter(Boolean)))].sort(sortAlpha);
@@ -943,11 +889,11 @@ function AppInner(){
     return dir*(a.id-b.id);
   });
 
-  // Keyboard navigation for film detail modal
+  // Keyboard navigation
   useEffect(()=>{
     if(!selectedFilm) return;
     const handler=(e)=>{
-      if(e.key==="Escape"){setSelectedFilm(null);return;}
+      if(e.key==="Escape"){closeFilm();return;}
       const idx=filtered.findIndex(f=>f.id===selectedFilm.id);
       if(e.key==="ArrowRight"&&idx<filtered.length-1) setSelectedFilm(filtered[idx+1]);
       if(e.key==="ArrowLeft"&&idx>0) setSelectedFilm(filtered[idx-1]);
@@ -957,12 +903,10 @@ function AppInner(){
   },[selectedFilm,filtered]);
 
   const selectedIdx=selectedFilm?filtered.findIndex(f=>f.id===selectedFilm.id):-1;
-
   const pageSize=viewMode==="list"?PAGE_SIZE_LIST:PAGE_SIZE;
   const paginated=filtered.slice(0,page*pageSize);
   const hasMore=paginated.length<filtered.length;
 
-  // Stats via hook
   const{byDecade,byGenre,byDirector,byCountry,totalOscars,avgRating,topGenre,topDirector,topDecade,topForeignCountry,longestFilm,shortestFilm,mostAwardedDirector}=useStats(watchedFilms);
 
   const tabBtn=(tId,label,count)=>(
@@ -1016,14 +960,16 @@ function AppInner(){
           </div>
         </header>
 
-        {/* Tabs + Add */}
+        {/* Tabs + Add (only when unlocked) */}
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.5rem",flexWrap:"wrap",gap:8}}>
           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
             {tabBtn("stats","Stats",0)}
             {tabBtn("watched","Watched",watchedFilms.length)}
             {tabBtn("watchlist","Watchlist",watchlistFilms.length)}
           </div>
-          <button onClick={handleAddClick} style={{background:t.accent,color:t.accentText,border:"none",borderRadius:8,padding:"9px 18px",fontWeight:500,cursor:"pointer",fontSize:14}}>+ Add film</button>
+          {isUnlocked&&(
+            <button onClick={handleAddClick} style={{background:t.accent,color:t.accentText,border:"none",borderRadius:8,padding:"9px 18px",fontWeight:500,cursor:"pointer",fontSize:14}}>+ Add film</button>
+          )}
         </div>
 
         {/* Stats */}
@@ -1051,6 +997,9 @@ function AppInner(){
         {/* Watched / Watchlist */}
         {(tab==="watched"||tab==="watchlist")&&(
           <>
+            {/* Recently added strip — watched tab only */}
+            {tab==="watched"&&<RecentlyAdded films={recentlyAdded} onSelect={openFilm}/>}
+
             <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:"0.75rem"}}>
               <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search films, directors, actors..." style={{flex:"1 1 200px",minWidth:0,...sel}}/>
               <select value={filterGenre} onChange={e=>setFilterGenre(e.target.value)} style={{flex:"1 1 120px",...sel}}>
@@ -1075,13 +1024,8 @@ function AppInner(){
                 {sortBy==="title"?(sortDir==="desc"?"Z → A":"A → Z"):sortBy==="year"?(sortDir==="desc"?"Newer first":"Older first"):(sortDir==="desc"?"Highest first":"Lowest first")}
               </button>
               <span style={{fontSize:12,color:t.textSecondary,marginLeft:"auto"}}>{filtered.length} film{filtered.length!==1?"s":""}</span>
-              {/* Random picker — watchlist only */}
               {tab==="watchlist"&&filtered.length>0&&(
-                <button
-                  onClick={()=>setSelectedFilm(filtered[Math.floor(Math.random()*filtered.length)])}
-                  title="Pick a random film from your watchlist"
-                  style={{background:t.bgSecondary,border:`1px solid ${t.border}`,borderRadius:6,padding:"5px 10px",cursor:"pointer",color:t.textSecondary,fontSize:12,whiteSpace:"nowrap"}}
-                >🎲 Random</button>
+                <button onClick={()=>openFilm(filtered[Math.floor(Math.random()*filtered.length)])} title="Pick a random film" style={{background:t.bgSecondary,border:`1px solid ${t.border}`,borderRadius:6,padding:"5px 10px",cursor:"pointer",color:t.textSecondary,fontSize:12,whiteSpace:"nowrap"}}>🎲 Random</button>
               )}
               <div style={{display:"flex",gap:4}}>
                 <button onClick={()=>setViewMode("grid")} style={{background:viewMode==="grid"?t.accent:t.bgSecondary,border:`1px solid ${t.border}`,borderRadius:6,padding:"5px 9px",cursor:"pointer",color:viewMode==="grid"?t.accentText:t.textSecondary,fontSize:14,lineHeight:1}}>⊞</button>
@@ -1093,10 +1037,10 @@ function AppInner(){
               :<div style={{scrollbarGutter:"stable"}}>
                 {viewMode==="grid"
                   ?<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(150px, 1fr))",gap:12}}>
-                    {paginated.map(f=><FilmCard key={f.id} film={f} onSelect={setSelectedFilm}/>)}
+                    {paginated.map(f=><FilmCard key={f.id} film={f} onSelect={openFilm}/>)}
                   </div>
                   :<div style={{display:"flex",flexDirection:"column",gap:8}}>
-                    {paginated.map(f=><FilmListRow key={f.id} film={f} onSelect={setSelectedFilm}/>)}
+                    {paginated.map(f=><FilmListRow key={f.id} film={f} onSelect={openFilm}/>)}
                   </div>
                 }
                 {hasMore&&(
@@ -1114,7 +1058,7 @@ function AppInner(){
         {/* Modals */}
         {selectedFilm&&(
           <FilmDetailModal
-            film={selectedFilm} onClose={()=>setSelectedFilm(null)}
+            film={selectedFilm} onClose={closeFilm}
             onRemove={removeFilm}
             onToggleRewatch={id=>{toggleRewatch(id);setSelectedFilm(f=>({...f,rewatched:!f.rewatched}));}}
             onMoveToWatched={id=>updateFilm(id,{list:"watched"})}
@@ -1128,7 +1072,7 @@ function AppInner(){
         {shareFilm&&<ShareCard film={shareFilm} onClose={()=>setShareFilm(null)}/>}
         {showPassword&&(
           <PasswordModal
-            onSuccess={()=>{setIsUnlocked(true);if(pendingAction){pendingAction();setPendingAction(null);}}}
+            onSuccess={()=>{unlock();if(pendingAction){pendingAction();setPendingAction(null);}}}
             onClose={()=>{setShowPassword(false);setPendingAction(null);}}
           />
         )}
@@ -1140,22 +1084,17 @@ function AppInner(){
         )}
         {suggestions&&(
           <SuggestionsModal
-            data={suggestions}
-            onClose={()=>setSuggestions(null)}
-            onAdd={addFilm}
-            existingFilms={films}
-            showToast={showToast}
+            data={suggestions} onClose={()=>setSuggestions(null)}
+            onAdd={addFilm} existingFilms={films} showToast={showToast}
           />
         )}
 
-        {/* Suggestions loading indicator */}
         {suggestionsLoading&&(
           <div style={{position:"fixed",bottom:28,left:"50%",transform:"translateX(-50%)",background:t.bgSecondary,border:`1px solid ${t.border}`,color:t.textSecondary,padding:"10px 18px",borderRadius:10,fontSize:13,zIndex:99998,display:"flex",alignItems:"center",gap:8,boxShadow:"0 4px 20px rgba(0,0,0,0.15)",pointerEvents:"none"}}>
             ⏳ Finding similar films…
           </div>
         )}
 
-        {/* Toast */}
         {toast&&<Toast message={toast} onDone={()=>setToast(null)}/>}
 
       </div>
