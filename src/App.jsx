@@ -243,7 +243,6 @@ function useStats(watchedFilms) {
 function decadeOf(year){const y=parseInt(year);return isNaN(y)?"Unknown":`${Math.floor(y/10)*10}s`;}
 function parseRuntime(r){if(!r)return 0;const m=String(r).match(/(\d+)/);return m?parseInt(m[1]):0;}
 
-// Minimal CSV parser — handles quoted fields and commas inside quotes
 function parseCSV(text) {
   const lines = text.replace(/\r\n/g,"\n").replace(/\r/g,"\n").split("\n").filter(l=>l.trim());
   const headers = splitCSVLine(lines[0]);
@@ -267,7 +266,6 @@ function splitCSVLine(line) {
   return result;
 }
 
-// Export helpers
 function downloadFile(content, filename, mimeType) {
   const blob = new Blob([content], {type: mimeType});
   const url = URL.createObjectURL(blob);
@@ -289,7 +287,7 @@ function exportJSON(films) {
 function exportCSV(films) {
   const headers = ["title","year","genre","director","country","actors","awards","imdbRating","imdbId","runtime","rewatched","list","plot"];
   const escape = v => {
-    const s = String(v??""  );
+    const s = String(v??"");
     return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s.replace(/"/g,'""')}"` : s;
   };
   const rows = [headers.join(","), ...films.map(f=>headers.map(h=>escape(f[h])).join(","))];
@@ -496,14 +494,14 @@ function ShareCard({film,onClose}){
 }
 
 // ─── Import / Export Modal ────────────────────────────────────────────────────
-function ImportExportModal({onClose,films,onImportFilm}){
+function ImportExportModal({onClose,films,onImportFilm,isUnlocked}){
   const t=useT();
   const fileRef=useRef(null);
   const cancelRef=useRef(false);
 
-  const[step,setStep]=useState("menu"); // menu | preview | importing | done
-  const[importType,setImportType]=useState(null); // "letterboxd" | "json"
-  const[preview,setPreview]=useState([]); // [{title,year,isDup,status}]
+  const[step,setStep]=useState("menu");
+  const[importType,setImportType]=useState(null);
+  const[preview,setPreview]=useState([]);
   const[progress,setProgress]=useState({done:0,total:0,added:0,skipped:0,failed:0});
   const[log,setLog]=useState([]);
 
@@ -516,7 +514,6 @@ function ImportExportModal({onClose,films,onImportFilm}){
     if(!file) return;
     const text=await file.text();
 
-    // Detect format
     if(file.name.endsWith(".json")){
       try{
         const parsed=JSON.parse(text);
@@ -533,10 +530,8 @@ function ImportExportModal({onClose,films,onImportFilm}){
       return;
     }
 
-    // Letterboxd CSV
     try{
       const rows=parseCSV(text);
-      // Letterboxd columns: Date, Name, Year, Letterboxd URI, Rating, Rewatch, Tags, Watched Date
       const mapped=rows
         .filter(r=>r.Name&&r.Name.trim())
         .map(r=>({
@@ -568,7 +563,6 @@ function ImportExportModal({onClose,films,onImportFilm}){
       setLog(prev=>[{title:item.title,year:item.year,status:"loading"},...prev.slice(0,19)]);
       try{
         if(importType==="json"){
-          // Direct restore — no TMDB fetch needed
           await onImportFilm({
             ...item.raw,
             awards:Number(item.raw.awards)||0,
@@ -578,7 +572,6 @@ function ImportExportModal({onClose,films,onImportFilm}){
           added++;
           setLog(prev=>[{...prev[0],status:"ok"},...prev.slice(1)]);
         } else {
-          // Letterboxd — search TMDB then fetch details
           const params={query:item.title,include_adult:"false",page:"1"};
           if(item.year) params.year=item.year;
           const d=await tmdbFetch("/search/movie",params);
@@ -599,14 +592,11 @@ function ImportExportModal({onClose,films,onImportFilm}){
         setLog(prev=>[{...prev[0],status:"fail"},...prev.slice(1)]);
       }
       setProgress(p=>({...p,done:i+1,added,skipped,failed}));
-      // Brief pause between requests to be kind to the APIs
       if(i<toImport.length-1) await new Promise(r=>setTimeout(r,350));
     }
     setProgress(p=>({...p,done:toImport.length,added,skipped,failed}));
     setStep("done");
   };
-
-  const inp={background:t.bgTertiary,border:`1px solid ${t.border}`,borderRadius:6,color:t.textPrimary,padding:"8px 10px",fontSize:13,boxSizing:"border-box"};
 
   return(
     <Fade>
@@ -627,27 +617,33 @@ function ImportExportModal({onClose,films,onImportFilm}){
           {/* ── Menu ── */}
           {step==="menu"&&(
             <>
-              {/* Export */}
+              {/* Export — always visible */}
               <div style={{marginBottom:"1.5rem"}}>
                 <div style={{fontSize:13,fontWeight:500,color:t.textPrimary,marginBottom:"0.5rem"}}>Export your collection</div>
                 <div style={{fontSize:12,color:t.textSecondary,marginBottom:"0.75rem"}}>Download a backup you can restore later, or open in Excel / Google Sheets.</div>
                 <div style={{display:"flex",gap:8}}>
-                  <button onClick={()=>{exportJSON(films);}} style={{flex:1,background:t.bgSecondary,border:`1px solid ${t.border}`,borderRadius:8,padding:"10px",cursor:"pointer",color:t.textPrimary,fontSize:13,fontWeight:500}}>⬇ JSON backup</button>
-                  <button onClick={()=>{exportCSV(films);}} style={{flex:1,background:t.bgSecondary,border:`1px solid ${t.border}`,borderRadius:8,padding:"10px",cursor:"pointer",color:t.textPrimary,fontSize:13,fontWeight:500}}>⬇ CSV (Excel / Sheets)</button>
+                  <button onClick={()=>exportJSON(films)} style={{flex:1,background:t.bgSecondary,border:`1px solid ${t.border}`,borderRadius:8,padding:"10px",cursor:"pointer",color:t.textPrimary,fontSize:13,fontWeight:500}}>⬇ JSON backup</button>
+                  <button onClick={()=>exportCSV(films)} style={{flex:1,background:t.bgSecondary,border:`1px solid ${t.border}`,borderRadius:8,padding:"10px",cursor:"pointer",color:t.textPrimary,fontSize:13,fontWeight:500}}>⬇ CSV (Excel / Sheets)</button>
                 </div>
               </div>
 
               <div style={{borderTop:`1px solid ${t.border}`,marginBottom:"1.5rem"}}/>
 
-              {/* Import */}
-              <div>
-                <div style={{fontSize:13,fontWeight:500,color:t.textPrimary,marginBottom:"0.5rem"}}>Import films</div>
-                <div style={{fontSize:12,color:t.textSecondary,marginBottom:"0.75rem",lineHeight:1.6}}>
-                  Restore a <strong style={{color:t.textPrimary}}>JSON backup</strong> from this app, or import a <strong style={{color:t.textPrimary}}>Letterboxd CSV</strong> export (go to letterboxd.com → Settings → Import & Export → Export your data).
+              {/* Import — locked behind password */}
+              {isUnlocked ? (
+                <div>
+                  <div style={{fontSize:13,fontWeight:500,color:t.textPrimary,marginBottom:"0.5rem"}}>Import films</div>
+                  <div style={{fontSize:12,color:t.textSecondary,marginBottom:"0.75rem",lineHeight:1.6}}>
+                    Restore a <strong style={{color:t.textPrimary}}>JSON backup</strong> from this app, or import a <strong style={{color:t.textPrimary}}>Letterboxd CSV</strong> export (go to letterboxd.com → Settings → Import &amp; Export → Export your data).
+                  </div>
+                  <input ref={fileRef} type="file" accept=".json,.csv" onChange={handleFile} style={{display:"none"}}/>
+                  <button onClick={()=>fileRef.current?.click()} style={{width:"100%",background:t.accent,color:t.accentText,border:"none",borderRadius:8,padding:"11px",cursor:"pointer",fontSize:14,fontWeight:500}}>Choose file (.json or .csv)</button>
                 </div>
-                <input ref={fileRef} type="file" accept=".json,.csv" onChange={handleFile} style={{display:"none"}}/>
-                <button onClick={()=>fileRef.current?.click()} style={{width:"100%",background:t.accent,color:t.accentText,border:"none",borderRadius:8,padding:"11px",cursor:"pointer",fontSize:14,fontWeight:500}}>Choose file (.json or .csv)</button>
-              </div>
+              ) : (
+                <div style={{background:t.bgSecondary,border:`1px solid ${t.border}`,borderRadius:8,padding:"12px 14px",fontSize:12,color:t.textSecondary}}>
+                  🔒 Unlock the collection to import films.
+                </div>
+              )}
             </>
           )}
 
@@ -655,7 +651,8 @@ function ImportExportModal({onClose,films,onImportFilm}){
           {step==="preview"&&(
             <>
               <div style={{fontSize:12,color:t.textSecondary,marginBottom:"1rem",lineHeight:1.6}}>
-                {preview.filter(p=>!p.isDup).length} film{preview.filter(p=>!p.isDup).length!==1?"s":""} will be imported. <span style={{color:t.red}}>{preview.filter(p=>p.isDup).length} duplicate{preview.filter(p=>p.isDup).length!==1?"s":""}</span> will be skipped.
+                {preview.filter(p=>!p.isDup).length} film{preview.filter(p=>!p.isDup).length!==1?"s":""} will be imported.{" "}
+                <span style={{color:t.red}}>{preview.filter(p=>p.isDup).length} duplicate{preview.filter(p=>p.isDup).length!==1?"s":""}</span> will be skipped.
                 {importType==="letterboxd"&&<span> Each film will be looked up on TMDB — this may take a few minutes for large lists.</span>}
               </div>
               <div style={{maxHeight:320,overflowY:"auto",marginBottom:"1rem",display:"flex",flexDirection:"column",gap:4}}>
@@ -670,7 +667,7 @@ function ImportExportModal({onClose,films,onImportFilm}){
                 ))}
               </div>
               <div style={{display:"flex",gap:8}}>
-                <button onClick={()=>{setStep("menu");setPreview([]);fileRef.current&&(fileRef.current.value="");}} style={{flex:1,background:"none",border:`1px solid ${t.border}`,borderRadius:8,color:t.textSecondary,padding:"10px",cursor:"pointer",fontSize:13}}>Back</button>
+                <button onClick={()=>{setStep("menu");setPreview([]);if(fileRef.current)fileRef.current.value="";}} style={{flex:1,background:"none",border:`1px solid ${t.border}`,borderRadius:8,color:t.textSecondary,padding:"10px",cursor:"pointer",fontSize:13}}>Back</button>
                 <button onClick={startImport} disabled={preview.filter(p=>!p.isDup).length===0} style={{flex:2,background:t.accent,color:t.accentText,border:"none",borderRadius:8,padding:"10px",fontWeight:500,cursor:preview.filter(p=>!p.isDup).length===0?"not-allowed":"pointer",fontSize:14,opacity:preview.filter(p=>!p.isDup).length===0?0.5:1}}>
                   Import {preview.filter(p=>!p.isDup).length} film{preview.filter(p=>!p.isDup).length!==1?"s":""}
                 </button>
@@ -1121,10 +1118,7 @@ function AppInner(){
     if(tmdbId) fetchSuggestions(tmdbId,film.title);
   };
 
-  // For import: direct addFilm without triggering suggestions
-  const handleImportFilm=async(film)=>{
-    await addFilm(film);
-  };
+  const handleImportFilm=async(film)=>await addFilm(film);
 
   const watchedFilms=films.filter(f=>f.list!=="watchlist");
   const watchlistFilms=films.filter(f=>f.list==="watchlist");
@@ -1226,7 +1220,6 @@ function AppInner(){
             <div style={{fontSize:12,color:t.textSecondary,marginTop:2}}>{watchedFilms.length} watched · {watchlistFilms.length} on watchlist</div>
           </div>
           <div style={{flex:1,display:"flex",justifyContent:"flex-end",alignItems:"center",gap:8}}>
-            {/* Import/Export button — always visible, no unlock required for export */}
             <button onClick={()=>setShowImportExport(true)} title="Import / Export" style={{background:t.bgSecondary,border:`1px solid ${t.border}`,borderRadius:8,padding:"6px 10px",cursor:"pointer",color:t.textSecondary,fontSize:13}}>⇅</button>
             <ThemeToggle themeId={themeId} onChange={setThemeId}/>
           </div>
@@ -1361,6 +1354,7 @@ function AppInner(){
             onClose={()=>setShowImportExport(false)}
             films={films}
             onImportFilm={handleImportFilm}
+            isUnlocked={isUnlocked}
           />
         )}
 
