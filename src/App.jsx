@@ -186,19 +186,14 @@ function useFilms() {
     })();
   },[]);
 
-  // Optimistic add: film appears instantly, reconciled after Supabase confirms
   const addFilm = async(film)=>{
     const tempId=`temp_${Date.now()}`;
     const optimistic={...film,id:tempId,awards:Number(film.awards)||0,created_at:new Date().toISOString()};
     setFilms(prev=>[optimistic,...prev]);
     if(supabase){
       const{data,error}=await supabase.from("films").insert(filmToRow(film)).select().single();
-      if(!error&&data){
-        setFilms(prev=>prev.map(f=>f.id===tempId?rowToFilm(data):f));
-      } else {
-        // Rollback on failure
-        setFilms(prev=>prev.filter(f=>f.id!==tempId));
-      }
+      if(!error&&data) setFilms(prev=>prev.map(f=>f.id===tempId?rowToFilm(data):f));
+      else setFilms(prev=>prev.filter(f=>f.id!==tempId));
     }
   };
 
@@ -248,6 +243,59 @@ function useStats(watchedFilms) {
 function decadeOf(year){const y=parseInt(year);return isNaN(y)?"Unknown":`${Math.floor(y/10)*10}s`;}
 function parseRuntime(r){if(!r)return 0;const m=String(r).match(/(\d+)/);return m?parseInt(m[1]):0;}
 
+// Minimal CSV parser — handles quoted fields and commas inside quotes
+function parseCSV(text) {
+  const lines = text.replace(/\r\n/g,"\n").replace(/\r/g,"\n").split("\n").filter(l=>l.trim());
+  const headers = splitCSVLine(lines[0]);
+  return lines.slice(1).map(line=>{
+    const vals = splitCSVLine(line);
+    const obj={};
+    headers.forEach((h,i)=>{obj[h.trim()]=vals[i]?.trim()||"";});
+    return obj;
+  });
+}
+function splitCSVLine(line) {
+  const result=[];let cur="";let inQuotes=false;
+  for(let i=0;i<line.length;i++){
+    const ch=line[i];
+    if(ch==='"'&&inQuotes&&line[i+1]==='"'){cur+='"';i++;}
+    else if(ch==='"'){inQuotes=!inQuotes;}
+    else if(ch===','&&!inQuotes){result.push(cur);cur="";}
+    else{cur+=ch;}
+  }
+  result.push(cur);
+  return result;
+}
+
+// Export helpers
+function downloadFile(content, filename, mimeType) {
+  const blob = new Blob([content], {type: mimeType});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href=url; a.download=filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportJSON(films) {
+  const data = films.map(f=>({
+    title:f.title, year:f.year, genre:f.genre, director:f.director,
+    country:f.country, actors:f.actors, awards:f.awards, imdbRating:f.imdbRating,
+    imdbId:f.imdbId, poster:f.poster, backdrop:f.backdrop, plot:f.plot,
+    runtime:f.runtime, rewatched:f.rewatched, list:f.list
+  }));
+  downloadFile(JSON.stringify(data, null, 2), `my-film-collection-${new Date().toISOString().slice(0,10)}.json`, "application/json");
+}
+
+function exportCSV(films) {
+  const headers = ["title","year","genre","director","country","actors","awards","imdbRating","imdbId","runtime","rewatched","list","plot"];
+  const escape = v => {
+    const s = String(v??""  );
+    return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s.replace(/"/g,'""')}"` : s;
+  };
+  const rows = [headers.join(","), ...films.map(f=>headers.map(h=>escape(f[h])).join(","))];
+  downloadFile(rows.join("\n"), `my-film-collection-${new Date().toISOString().slice(0,10)}.csv`, "text/csv");
+}
+
 // ─── Fade ─────────────────────────────────────────────────────────────────────
 function Fade({children}){
   const[vis,setVis]=useState(false);
@@ -279,7 +327,7 @@ function ThemeToggle({ themeId, onChange }) {
   const toggleMode = () => onChange(`${cur.mode === "dark" ? "light" : "dark"}-${cur.hue}`);
   const toggleHue  = () => onChange(`${cur.mode}-${cur.hue === "violet" ? "blue" : "violet"}`);
   const Switch = ({ checked, onToggle, iconOff, iconOn, title }) => (
-    <button onClick={onToggle} title={title} style={{position:"relative",width:44,height:24,borderRadius:12,border:`1px solid ${t.border}`,cursor:"pointer",flexShrink:0,padding:0,background:checked?t.accent:t.bgSecondary,transition:"background 0.2s, border-color 0.2s"}}>
+    <button onClick={onToggle} title={title} style={{position:"relative",width:44,height:24,borderRadius:12,border:`1px solid ${t.border}`,cursor:"pointer",flexShrink:0,padding:0,background:checked?t.accent:t.bgSecondary,transition:"background 0.2s"}}>
       <span style={{position:"absolute",top:2,left:checked?21:2,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left 0.2s",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,lineHeight:1,boxShadow:"0 1px 3px rgba(0,0,0,0.3)"}}>
         {checked?iconOn:iconOff}
       </span>
@@ -304,15 +352,9 @@ function EmptyState({isWatchlist,onAdd,isUnlocked}){
         <path d="M24 40l3 3 5-6" stroke={t.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
         <path d="M44 32h16M44 40h12M44 48h8" stroke={t.accent} strokeWidth="2" strokeLinecap="round" opacity="0.6"/>
       </svg>
-      <div style={{fontSize:16,fontWeight:500,color:t.textPrimary,marginBottom:8}}>
-        {isWatchlist?"Your watchlist is empty":"No films in your collection yet"}
-      </div>
-      <div style={{fontSize:13,color:t.textSecondary,marginBottom:20}}>
-        {isWatchlist?"Add films you want to watch and they'll appear here.":"Start building your personal film archive."}
-      </div>
-      {isUnlocked&&(
-        <button onClick={onAdd} style={{background:t.accent,color:t.accentText,border:"none",borderRadius:8,padding:"10px 24px",fontWeight:500,cursor:"pointer",fontSize:14}}>+ Add your first film</button>
-      )}
+      <div style={{fontSize:16,fontWeight:500,color:t.textPrimary,marginBottom:8}}>{isWatchlist?"Your watchlist is empty":"No films in your collection yet"}</div>
+      <div style={{fontSize:13,color:t.textSecondary,marginBottom:20}}>{isWatchlist?"Add films you want to watch and they'll appear here.":"Start building your personal film archive."}</div>
+      {isUnlocked&&<button onClick={onAdd} style={{background:t.accent,color:t.accentText,border:"none",borderRadius:8,padding:"10px 24px",fontWeight:500,cursor:"pointer",fontSize:14}}>+ Add your first film</button>}
     </div>
   );
 }
@@ -338,17 +380,13 @@ function RecentlyAdded({films,onSelect}){
       <div style={{fontSize:12,color:t.textMuted,textTransform:"uppercase",letterSpacing:1,marginBottom:"0.6rem"}}>Recently added</div>
       <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:4}}>
         {films.map(film=>(
-          <div key={film.id} onClick={()=>onSelect(film)} style={{flexShrink:0,width:90,cursor:"pointer",borderRadius:8,overflow:"hidden",border:`1px solid ${Number(film.awards)>0?"#f5c518":t.border}`,background:t.bgSecondary,boxShadow:Number(film.awards)>0?"0 0 10px rgba(245,197,24,0.18)":"none",transition:"transform 0.15s, border-color 0.15s"}}
-            onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";}}
-            onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";}}
+          <div key={film.id} onClick={()=>onSelect(film)} style={{flexShrink:0,width:90,cursor:"pointer",borderRadius:8,overflow:"hidden",border:`1px solid ${Number(film.awards)>0?"#f5c518":t.border}`,background:t.bgSecondary,boxShadow:Number(film.awards)>0?"0 0 10px rgba(245,197,24,0.18)":"none",transition:"transform 0.15s"}}
+            onMouseEnter={e=>e.currentTarget.style.transform="translateY(-2px)"}
+            onMouseLeave={e=>e.currentTarget.style.transform="translateY(0)"}
           >
             <div style={{position:"relative",height:130,background:t.bgTertiary,display:"flex",alignItems:"center",justifyContent:"center"}}>
-              {film.poster&&film.poster!=="N/A"
-                ?<img src={film.poster} alt={film.title} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={e=>e.target.style.display="none"}/>
-                :<span style={{fontSize:24,opacity:.3}}>🎬</span>}
-              {Number(film.awards)>0&&(
-                <div style={{position:"absolute",top:5,right:5,background:"rgba(0,0,0,0.7)",borderRadius:5,padding:"2px 5px",fontSize:10,color:"#f5c518",fontWeight:600}}>🏆 {film.awards}</div>
-              )}
+              {film.poster&&film.poster!=="N/A"?<img src={film.poster} alt={film.title} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={e=>e.target.style.display="none"}/>:<span style={{fontSize:24,opacity:.3}}>🎬</span>}
+              {Number(film.awards)>0&&<div style={{position:"absolute",top:5,right:5,background:"rgba(0,0,0,0.7)",borderRadius:5,padding:"2px 5px",fontSize:10,color:"#f5c518",fontWeight:600}}>🏆 {film.awards}</div>}
             </div>
             <div style={{padding:"6px 7px 8px"}}>
               <div style={{fontSize:11,fontWeight:500,color:t.textPrimary,lineHeight:1.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{film.title}</div>
@@ -364,19 +402,17 @@ function RecentlyAdded({films,onSelect}){
 // ─── Film Card ────────────────────────────────────────────────────────────────
 function FilmCard({film,onSelect}){
   const t=useT();
-  const isOscarWinner=Number(film.awards)>0;
+  const isOscar=Number(film.awards)>0;
   return(
-    <div onClick={()=>onSelect(film)} style={{cursor:"pointer",borderRadius:10,overflow:"hidden",border:`1px solid ${isOscarWinner?"#f5c518":t.border}`,background:t.bgSecondary,display:"flex",flexDirection:"column",transition:"transform 0.15s, border-color 0.15s",boxShadow:isOscarWinner?"0 0 14px rgba(245,197,24,0.15)":"none"}}
-      onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.borderColor=isOscarWinner?"#f5c518":t.accent;}}
-      onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.borderColor=isOscarWinner?"#f5c518":t.border;}}
+    <div onClick={()=>onSelect(film)} style={{cursor:"pointer",borderRadius:10,overflow:"hidden",border:`1px solid ${isOscar?"#f5c518":t.border}`,background:t.bgSecondary,display:"flex",flexDirection:"column",transition:"transform 0.15s, border-color 0.15s",boxShadow:isOscar?"0 0 14px rgba(245,197,24,0.15)":"none"}}
+      onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.borderColor=isOscar?"#f5c518":t.accent;}}
+      onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.borderColor=isOscar?"#f5c518":t.border;}}
     >
       <div style={{height:210,background:t.bgTertiary,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
-        {film.poster&&film.poster!=="N/A"
-          ?<img src={film.poster} alt={film.title} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={e=>e.target.style.display="none"}/>
-          :<span style={{fontSize:36,opacity:.4}}>🎬</span>}
+        {film.poster&&film.poster!=="N/A"?<img src={film.poster} alt={film.title} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={e=>e.target.style.display="none"}/>:<span style={{fontSize:36,opacity:.4}}>🎬</span>}
         {film.rewatched&&<div style={{position:"absolute",top:8,right:8,background:t.greenBg,color:t.green,fontSize:10,borderRadius:6,padding:"2px 7px"}}>↩ Rewatched</div>}
         {film.list==="watchlist"&&<div style={{position:"absolute",top:8,left:8,background:t.purpleBg,color:t.purple,fontSize:10,borderRadius:6,padding:"2px 7px"}}>🔖 Watchlist</div>}
-        {isOscarWinner&&<div style={{position:"absolute",bottom:8,right:8,background:"rgba(0,0,0,0.72)",borderRadius:6,padding:"2px 8px",fontSize:11,color:"#f5c518",fontWeight:600}}>🏆 {film.awards} Oscar{Number(film.awards)>1?"s":""}</div>}
+        {isOscar&&<div style={{position:"absolute",bottom:8,right:8,background:"rgba(0,0,0,0.72)",borderRadius:6,padding:"2px 8px",fontSize:11,color:"#f5c518",fontWeight:600}}>🏆 {film.awards} Oscar{Number(film.awards)>1?"s":""}</div>}
       </div>
       <div style={{padding:"10px 12px 12px"}}>
         <div style={{fontWeight:500,fontSize:13,color:t.textPrimary,lineHeight:1.3,marginBottom:3}}>{film.title}</div>
@@ -390,26 +426,22 @@ function FilmCard({film,onSelect}){
 // ─── Film List Row ────────────────────────────────────────────────────────────
 function FilmListRow({film,onSelect}){
   const t=useT();
-  const isOscarWinner=Number(film.awards)>0;
+  const isOscar=Number(film.awards)>0;
   return(
-    <div onClick={()=>onSelect(film)} style={{cursor:"pointer",display:"flex",alignItems:"center",gap:12,padding:"8px 10px",borderRadius:8,border:`1px solid ${isOscarWinner?"#f5c518":t.border}`,background:t.bgSecondary,transition:"border-color 0.15s, background 0.15s",boxShadow:isOscarWinner?"0 0 10px rgba(245,197,24,0.1)":"none"}}
-      onMouseEnter={e=>{e.currentTarget.style.borderColor=isOscarWinner?"#f5c518":t.accent;e.currentTarget.style.background=t.bgHover;}}
-      onMouseLeave={e=>{e.currentTarget.style.borderColor=isOscarWinner?"#f5c518":t.border;e.currentTarget.style.background=t.bgSecondary;}}
+    <div onClick={()=>onSelect(film)} style={{cursor:"pointer",display:"flex",alignItems:"center",gap:12,padding:"8px 10px",borderRadius:8,border:`1px solid ${isOscar?"#f5c518":t.border}`,background:t.bgSecondary,transition:"border-color 0.15s, background 0.15s",boxShadow:isOscar?"0 0 10px rgba(245,197,24,0.1)":"none"}}
+      onMouseEnter={e=>{e.currentTarget.style.borderColor=isOscar?"#f5c518":t.accent;e.currentTarget.style.background=t.bgHover;}}
+      onMouseLeave={e=>{e.currentTarget.style.borderColor=isOscar?"#f5c518":t.border;e.currentTarget.style.background=t.bgSecondary;}}
     >
       <div style={{width:40,height:60,borderRadius:5,overflow:"hidden",flexShrink:0,background:t.bgTertiary,display:"flex",alignItems:"center",justifyContent:"center"}}>
-        {film.poster&&film.poster!=="N/A"
-          ?<img src={film.poster} alt={film.title} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={e=>e.target.style.display="none"}/>
-          :<span style={{fontSize:16,opacity:.4}}>🎬</span>}
+        {film.poster&&film.poster!=="N/A"?<img src={film.poster} alt={film.title} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={e=>e.target.style.display="none"}/>:<span style={{fontSize:16,opacity:.4}}>🎬</span>}
       </div>
       <div style={{flex:1,minWidth:0}}>
         <div style={{fontWeight:500,fontSize:14,color:t.textPrimary,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{film.title}</div>
-        <div style={{fontSize:12,color:t.textSecondary,marginTop:2}}>
-          {film.year}{film.director?` · ${film.director}`:""}{film.genre?` · ${film.genre.split(",")[0]}`:""}
-        </div>
+        <div style={{fontSize:12,color:t.textSecondary,marginTop:2}}>{film.year}{film.director?` · ${film.director}`:""}{film.genre?` · ${film.genre.split(",")[0]}`:""}</div>
       </div>
       <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4,flexShrink:0}}>
         {film.imdbRating&&<div style={{fontSize:12,color:t.goldText}}>⭐ {film.imdbRating}</div>}
-        {isOscarWinner&&<div style={{fontSize:11,background:t.goldBg,color:t.goldText,borderRadius:6,padding:"1px 7px"}}>🏆 {film.awards}</div>}
+        {isOscar&&<div style={{fontSize:11,background:t.goldBg,color:t.goldText,borderRadius:6,padding:"1px 7px"}}>🏆 {film.awards}</div>}
         {film.rewatched&&<div style={{fontSize:10,background:t.greenBg,color:t.green,borderRadius:6,padding:"1px 7px"}}>↩</div>}
         {film.list==="watchlist"&&<div style={{fontSize:10,background:t.purpleBg,color:t.purple,borderRadius:6,padding:"1px 7px"}}>🔖</div>}
       </div>
@@ -457,6 +489,249 @@ function ShareCard({film,onClose}){
             {ready&&<button onClick={download} style={{flex:2,background:t.accent,color:"#fff",border:"none",borderRadius:8,padding:"10px",fontWeight:500,cursor:"pointer",fontSize:14}}>{isIOS?"🖼 Open image":"⬇ Download for Stories"}</button>}
           </div>
           {ready&&<div style={{fontSize:11,color:"rgba(255,255,255,0.4)",textAlign:"center"}}>{isIOS?"Long-press the image to save it, then share to Stories":"Save and share it to your Instagram Story"}</div>}
+        </div>
+      </div>
+    </Fade>
+  );
+}
+
+// ─── Import / Export Modal ────────────────────────────────────────────────────
+function ImportExportModal({onClose,films,onImportFilm}){
+  const t=useT();
+  const fileRef=useRef(null);
+  const cancelRef=useRef(false);
+
+  const[step,setStep]=useState("menu"); // menu | preview | importing | done
+  const[importType,setImportType]=useState(null); // "letterboxd" | "json"
+  const[preview,setPreview]=useState([]); // [{title,year,isDup,status}]
+  const[progress,setProgress]=useState({done:0,total:0,added:0,skipped:0,failed:0});
+  const[log,setLog]=useState([]);
+
+  const isDup=(title,year)=>films.some(f=>
+    f.title.trim().toLowerCase()===title.trim().toLowerCase()&&String(f.year)===String(year)
+  );
+
+  const handleFile=async(e)=>{
+    const file=e.target.files?.[0];
+    if(!file) return;
+    const text=await file.text();
+
+    // Detect format
+    if(file.name.endsWith(".json")){
+      try{
+        const parsed=JSON.parse(text);
+        if(!Array.isArray(parsed)) throw new Error("Invalid JSON backup");
+        const rows=parsed.map(r=>({
+          title:r.title||"", year:String(r.year||""),
+          isDup:isDup(r.title,r.year),
+          raw:r, source:"json"
+        })).filter(r=>r.title);
+        setImportType("json");
+        setPreview(rows);
+        setStep("preview");
+      }catch{alert("Could not parse JSON file. Make sure it's a backup exported from this app.");}
+      return;
+    }
+
+    // Letterboxd CSV
+    try{
+      const rows=parseCSV(text);
+      // Letterboxd columns: Date, Name, Year, Letterboxd URI, Rating, Rewatch, Tags, Watched Date
+      const mapped=rows
+        .filter(r=>r.Name&&r.Name.trim())
+        .map(r=>({
+          title:r.Name?.trim()||"",
+          year:String(r.Year?.trim()||""),
+          isDup:isDup(r.Name?.trim(),r.Year?.trim()),
+          rewatched:(r.Rewatch?.trim().toLowerCase()==="yes"),
+          source:"letterboxd",
+          raw:r
+        }));
+      setImportType("letterboxd");
+      setPreview(mapped);
+      setStep("preview");
+    }catch{alert("Could not parse CSV file. Make sure it's a Letterboxd export.");}
+  };
+
+  const startImport=async()=>{
+    cancelRef.current=false;
+    const toImport=preview.filter(p=>!p.isDup);
+    setProgress({done:0,total:toImport.length,added:0,skipped:0,failed:0});
+    setLog([]);
+    setStep("importing");
+
+    let added=0,skipped=0,failed=0;
+
+    for(let i=0;i<toImport.length;i++){
+      if(cancelRef.current) break;
+      const item=toImport[i];
+      setLog(prev=>[{title:item.title,year:item.year,status:"loading"},...prev.slice(0,19)]);
+      try{
+        if(importType==="json"){
+          // Direct restore — no TMDB fetch needed
+          await onImportFilm({
+            ...item.raw,
+            awards:Number(item.raw.awards)||0,
+            rewatched:item.raw.rewatched??false,
+            list:item.raw.list||"watched"
+          });
+          added++;
+          setLog(prev=>[{...prev[0],status:"ok"},...prev.slice(1)]);
+        } else {
+          // Letterboxd — search TMDB then fetch details
+          const params={query:item.title,include_adult:"false",page:"1"};
+          if(item.year) params.year=item.year;
+          const d=await tmdbFetch("/search/movie",params);
+          const result=d.results?.[0];
+          if(!result){failed++;setLog(prev=>[{...prev[0],status:"fail"},...prev.slice(1)]);setProgress(p=>({...p,done:i+1,added,skipped,failed}));continue;}
+          const details=await getDetails({tmdb_id:result.id,poster_path:result.poster_path,overview:result.overview},null);
+          await onImportFilm({
+            ...details,
+            awards:Number(details.awards)||0,
+            rewatched:item.rewatched??false,
+            list:"watched"
+          });
+          added++;
+          setLog(prev=>[{...prev[0],status:"ok"},...prev.slice(1)]);
+        }
+      }catch{
+        failed++;
+        setLog(prev=>[{...prev[0],status:"fail"},...prev.slice(1)]);
+      }
+      setProgress(p=>({...p,done:i+1,added,skipped,failed}));
+      // Brief pause between requests to be kind to the APIs
+      if(i<toImport.length-1) await new Promise(r=>setTimeout(r,350));
+    }
+    setProgress(p=>({...p,done:toImport.length,added,skipped,failed}));
+    setStep("done");
+  };
+
+  const inp={background:t.bgTertiary,border:`1px solid ${t.border}`,borderRadius:6,color:t.textPrimary,padding:"8px 10px",fontSize:13,boxSizing:"border-box"};
+
+  return(
+    <Fade>
+      <div style={{position:"fixed",inset:0,background:t.overlayBg,display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:"1rem"}}>
+        <div onClick={e=>e.stopPropagation()} style={{background:t.bgModal,border:`1px solid ${t.border}`,borderRadius:14,padding:"1.5rem",width:"min(560px, 94vw)",maxHeight:"90vh",overflowY:"auto",color:t.textPrimary}}>
+
+          {/* Header */}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem"}}>
+            <div style={{fontSize:17,fontWeight:500}}>
+              {step==="menu"&&"Import / Export"}
+              {step==="preview"&&`Preview — ${preview.length} film${preview.length!==1?"s":""} found`}
+              {step==="importing"&&"Importing…"}
+              {step==="done"&&"Import complete"}
+            </div>
+            <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",fontSize:22,color:t.textMuted}}>×</button>
+          </div>
+
+          {/* ── Menu ── */}
+          {step==="menu"&&(
+            <>
+              {/* Export */}
+              <div style={{marginBottom:"1.5rem"}}>
+                <div style={{fontSize:13,fontWeight:500,color:t.textPrimary,marginBottom:"0.5rem"}}>Export your collection</div>
+                <div style={{fontSize:12,color:t.textSecondary,marginBottom:"0.75rem"}}>Download a backup you can restore later, or open in Excel / Google Sheets.</div>
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={()=>{exportJSON(films);}} style={{flex:1,background:t.bgSecondary,border:`1px solid ${t.border}`,borderRadius:8,padding:"10px",cursor:"pointer",color:t.textPrimary,fontSize:13,fontWeight:500}}>⬇ JSON backup</button>
+                  <button onClick={()=>{exportCSV(films);}} style={{flex:1,background:t.bgSecondary,border:`1px solid ${t.border}`,borderRadius:8,padding:"10px",cursor:"pointer",color:t.textPrimary,fontSize:13,fontWeight:500}}>⬇ CSV (Excel / Sheets)</button>
+                </div>
+              </div>
+
+              <div style={{borderTop:`1px solid ${t.border}`,marginBottom:"1.5rem"}}/>
+
+              {/* Import */}
+              <div>
+                <div style={{fontSize:13,fontWeight:500,color:t.textPrimary,marginBottom:"0.5rem"}}>Import films</div>
+                <div style={{fontSize:12,color:t.textSecondary,marginBottom:"0.75rem",lineHeight:1.6}}>
+                  Restore a <strong style={{color:t.textPrimary}}>JSON backup</strong> from this app, or import a <strong style={{color:t.textPrimary}}>Letterboxd CSV</strong> export (go to letterboxd.com → Settings → Import & Export → Export your data).
+                </div>
+                <input ref={fileRef} type="file" accept=".json,.csv" onChange={handleFile} style={{display:"none"}}/>
+                <button onClick={()=>fileRef.current?.click()} style={{width:"100%",background:t.accent,color:t.accentText,border:"none",borderRadius:8,padding:"11px",cursor:"pointer",fontSize:14,fontWeight:500}}>Choose file (.json or .csv)</button>
+              </div>
+            </>
+          )}
+
+          {/* ── Preview ── */}
+          {step==="preview"&&(
+            <>
+              <div style={{fontSize:12,color:t.textSecondary,marginBottom:"1rem",lineHeight:1.6}}>
+                {preview.filter(p=>!p.isDup).length} film{preview.filter(p=>!p.isDup).length!==1?"s":""} will be imported. <span style={{color:t.red}}>{preview.filter(p=>p.isDup).length} duplicate{preview.filter(p=>p.isDup).length!==1?"s":""}</span> will be skipped.
+                {importType==="letterboxd"&&<span> Each film will be looked up on TMDB — this may take a few minutes for large lists.</span>}
+              </div>
+              <div style={{maxHeight:320,overflowY:"auto",marginBottom:"1rem",display:"flex",flexDirection:"column",gap:4}}>
+                {preview.map((p,i)=>(
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 10px",borderRadius:7,background:p.isDup?t.redBg:t.bgSecondary,border:`1px solid ${p.isDup?t.redBorder:t.border}`,opacity:p.isDup?0.6:1}}>
+                    <span style={{fontSize:11,width:18,textAlign:"center",flexShrink:0}}>{p.isDup?"🔁":"🎬"}</span>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:13,color:t.textPrimary,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.title}</div>
+                      <div style={{fontSize:11,color:t.textSecondary}}>{p.year}{p.isDup?" · already in collection":""}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>{setStep("menu");setPreview([]);fileRef.current&&(fileRef.current.value="");}} style={{flex:1,background:"none",border:`1px solid ${t.border}`,borderRadius:8,color:t.textSecondary,padding:"10px",cursor:"pointer",fontSize:13}}>Back</button>
+                <button onClick={startImport} disabled={preview.filter(p=>!p.isDup).length===0} style={{flex:2,background:t.accent,color:t.accentText,border:"none",borderRadius:8,padding:"10px",fontWeight:500,cursor:preview.filter(p=>!p.isDup).length===0?"not-allowed":"pointer",fontSize:14,opacity:preview.filter(p=>!p.isDup).length===0?0.5:1}}>
+                  Import {preview.filter(p=>!p.isDup).length} film{preview.filter(p=>!p.isDup).length!==1?"s":""}
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* ── Importing ── */}
+          {step==="importing"&&(
+            <>
+              <div style={{marginBottom:"1.25rem"}}>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:t.textSecondary,marginBottom:8}}>
+                  <span>{progress.done} of {progress.total}</span>
+                  <span style={{color:t.green}}>✓ {progress.added} added</span>
+                </div>
+                <div style={{height:8,borderRadius:4,background:t.bgTertiary,overflow:"hidden"}}>
+                  <div style={{height:"100%",borderRadius:4,background:t.accent,width:`${progress.total?Math.round(progress.done/progress.total*100):0}%`,transition:"width 0.3s"}}/>
+                </div>
+              </div>
+              <div style={{maxHeight:260,overflowY:"auto",display:"flex",flexDirection:"column",gap:4}}>
+                {log.map((entry,i)=>(
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 10px",borderRadius:6,background:t.bgSecondary,border:`1px solid ${t.border}`}}>
+                    <span style={{fontSize:14,width:18,textAlign:"center",flexShrink:0}}>
+                      {entry.status==="loading"?"⏳":entry.status==="ok"?"✅":"❌"}
+                    </span>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:12,color:t.textPrimary,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{entry.title}</div>
+                      <div style={{fontSize:11,color:t.textSecondary}}>{entry.year}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button onClick={()=>cancelRef.current=true} style={{marginTop:"1rem",width:"100%",background:"none",border:`1px solid ${t.redBorder}`,borderRadius:8,color:t.red,padding:"9px",cursor:"pointer",fontSize:13}}>Cancel</button>
+            </>
+          )}
+
+          {/* ── Done ── */}
+          {step==="done"&&(
+            <div style={{textAlign:"center",padding:"1rem 0"}}>
+              <div style={{fontSize:32,marginBottom:12}}>🎉</div>
+              <div style={{fontSize:16,fontWeight:600,color:t.textPrimary,marginBottom:8}}>Import finished!</div>
+              <div style={{display:"flex",justifyContent:"center",gap:20,marginBottom:"1.5rem"}}>
+                <div style={{textAlign:"center"}}>
+                  <div style={{fontSize:24,fontWeight:600,color:t.green}}>{progress.added}</div>
+                  <div style={{fontSize:12,color:t.textSecondary}}>Added</div>
+                </div>
+                <div style={{textAlign:"center"}}>
+                  <div style={{fontSize:24,fontWeight:600,color:t.textMuted}}>{preview.filter(p=>p.isDup).length}</div>
+                  <div style={{fontSize:12,color:t.textSecondary}}>Skipped</div>
+                </div>
+                {progress.failed>0&&(
+                  <div style={{textAlign:"center"}}>
+                    <div style={{fontSize:24,fontWeight:600,color:t.red}}>{progress.failed}</div>
+                    <div style={{fontSize:12,color:t.textSecondary}}>Failed</div>
+                  </div>
+                )}
+              </div>
+              <button onClick={onClose} style={{background:t.accent,color:t.accentText,border:"none",borderRadius:8,padding:"10px 32px",fontWeight:500,cursor:"pointer",fontSize:14}}>Done</button>
+            </div>
+          )}
+
         </div>
       </div>
     </Fade>
@@ -715,19 +990,17 @@ function SuggestionsModal({data,onClose,onAdd,existingFilms,showToast}){
     setLoadingId(null);
   };
 
-  if(!picks.length){
-    return(
-      <Fade>
-        <div style={{position:"fixed",inset:0,background:t.overlayBg,display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:10002,padding:"1rem"}} onClick={onClose}>
-          <div onClick={e=>e.stopPropagation()} style={{background:t.bgModal,border:`1px solid ${t.border}`,borderRadius:14,padding:"2rem",width:"min(860px, 100%)",textAlign:"center"}}>
-            <div style={{fontSize:15,fontWeight:600,color:t.textPrimary,marginBottom:6}}>All done!</div>
-            <div style={{fontSize:13,color:t.textSecondary,marginBottom:"1rem"}}>Your collection is growing.</div>
-            <button onClick={onClose} style={{background:t.accent,color:t.accentText,border:"none",borderRadius:8,padding:"9px 24px",fontWeight:500,cursor:"pointer",fontSize:13}}>Done</button>
-          </div>
+  if(!picks.length) return(
+    <Fade>
+      <div style={{position:"fixed",inset:0,background:t.overlayBg,display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:10002,padding:"1rem"}} onClick={onClose}>
+        <div onClick={e=>e.stopPropagation()} style={{background:t.bgModal,border:`1px solid ${t.border}`,borderRadius:14,padding:"2rem",width:"min(860px, 100%)",textAlign:"center"}}>
+          <div style={{fontSize:15,fontWeight:600,color:t.textPrimary,marginBottom:6}}>All done!</div>
+          <div style={{fontSize:13,color:t.textSecondary,marginBottom:"1rem"}}>Your collection is growing.</div>
+          <button onClick={onClose} style={{background:t.accent,color:t.accentText,border:"none",borderRadius:8,padding:"9px 24px",fontWeight:500,cursor:"pointer",fontSize:13}}>Done</button>
         </div>
-      </Fade>
-    );
-  }
+      </div>
+    </Fade>
+  );
 
   return(
     <Fade>
@@ -787,17 +1060,14 @@ function AppInner(){
   const[tab,setTab]=useState("watched");
   const[showAdd,setShowAdd]=useState(false);
   const[showPassword,setShowPassword]=useState(false);
+  const[showImportExport,setShowImportExport]=useState(false);
   const[pendingAction,setPendingAction]=useState(null);
 
-  // Session-persistent unlock: survives refresh, cleared when tab closes
   const[isUnlocked,setIsUnlocked]=useState(()=>{
     if(!APP_PASSWORD) return true;
     try{return sessionStorage.getItem("mfc_unlocked")==="1";}catch{return false;}
   });
-  const unlock=()=>{
-    setIsUnlocked(true);
-    try{sessionStorage.setItem("mfc_unlocked","1");}catch{}
-  };
+  const unlock=()=>{setIsUnlocked(true);try{sessionStorage.setItem("mfc_unlocked","1");}catch{}};
 
   const[search,setSearch]=useState("");
   const[filterGenre,setFilterGenre]=useState("All");
@@ -815,13 +1085,10 @@ function AppInner(){
   const[suggestionsLoading,setSuggestionsLoading]=useState(false);
   const[toast,setToast]=useState(null);
 
-  // Scroll position memory
   const scrollRef=useRef(0);
   const openFilm=(film)=>{scrollRef.current=window.scrollY;setSelectedFilm(film);};
-  const closeFilm=()=>{setSelectedFilm(null);};
-  useEffect(()=>{
-    if(!selectedFilm) window.scrollTo({top:scrollRef.current,behavior:"instant"});
-  },[selectedFilm]);
+  const closeFilm=()=>setSelectedFilm(null);
+  useEffect(()=>{if(!selectedFilm) window.scrollTo({top:scrollRef.current,behavior:"instant"});},[selectedFilm]);
 
   const showToast=(msg)=>setToast(msg);
 
@@ -854,11 +1121,15 @@ function AppInner(){
     if(tmdbId) fetchSuggestions(tmdbId,film.title);
   };
 
+  // For import: direct addFilm without triggering suggestions
+  const handleImportFilm=async(film)=>{
+    await addFilm(film);
+  };
+
   const watchedFilms=films.filter(f=>f.list!=="watchlist");
   const watchlistFilms=films.filter(f=>f.list==="watchlist");
   const activeFilms=tab==="watchlist"?watchlistFilms:watchedFilms;
 
-  // Recently added: last 3 watched films by created_at, excluding optimistic temp entries
   const recentlyAdded=[...watchedFilms]
     .filter(f=>!String(f.id).startsWith("temp_"))
     .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))
@@ -889,7 +1160,6 @@ function AppInner(){
     return dir*(a.id-b.id);
   });
 
-  // Keyboard navigation
   useEffect(()=>{
     if(!selectedFilm) return;
     const handler=(e)=>{
@@ -955,21 +1225,21 @@ function AppInner(){
             <div style={{fontSize:20,fontWeight:600,color:t.textPrimary,letterSpacing:"-0.3px"}}>My Film Collection</div>
             <div style={{fontSize:12,color:t.textSecondary,marginTop:2}}>{watchedFilms.length} watched · {watchlistFilms.length} on watchlist</div>
           </div>
-          <div style={{flex:1,display:"flex",justifyContent:"flex-end"}}>
+          <div style={{flex:1,display:"flex",justifyContent:"flex-end",alignItems:"center",gap:8}}>
+            {/* Import/Export button — always visible, no unlock required for export */}
+            <button onClick={()=>setShowImportExport(true)} title="Import / Export" style={{background:t.bgSecondary,border:`1px solid ${t.border}`,borderRadius:8,padding:"6px 10px",cursor:"pointer",color:t.textSecondary,fontSize:13}}>⇅</button>
             <ThemeToggle themeId={themeId} onChange={setThemeId}/>
           </div>
         </header>
 
-        {/* Tabs + Add (only when unlocked) */}
+        {/* Tabs + Add */}
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.5rem",flexWrap:"wrap",gap:8}}>
           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
             {tabBtn("stats","Stats",0)}
             {tabBtn("watched","Watched",watchedFilms.length)}
             {tabBtn("watchlist","Watchlist",watchlistFilms.length)}
           </div>
-          {isUnlocked&&(
-            <button onClick={handleAddClick} style={{background:t.accent,color:t.accentText,border:"none",borderRadius:8,padding:"9px 18px",fontWeight:500,cursor:"pointer",fontSize:14}}>+ Add film</button>
-          )}
+          {isUnlocked&&<button onClick={handleAddClick} style={{background:t.accent,color:t.accentText,border:"none",borderRadius:8,padding:"9px 18px",fontWeight:500,cursor:"pointer",fontSize:14}}>+ Add film</button>}
         </div>
 
         {/* Stats */}
@@ -997,9 +1267,7 @@ function AppInner(){
         {/* Watched / Watchlist */}
         {(tab==="watched"||tab==="watchlist")&&(
           <>
-            {/* Recently added strip — watched tab only */}
             {tab==="watched"&&<RecentlyAdded films={recentlyAdded} onSelect={openFilm}/>}
-
             <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:"0.75rem"}}>
               <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search films, directors, actors..." style={{flex:"1 1 200px",minWidth:0,...sel}}/>
               <select value={filterGenre} onChange={e=>setFilterGenre(e.target.value)} style={{flex:"1 1 120px",...sel}}>
@@ -1025,7 +1293,7 @@ function AppInner(){
               </button>
               <span style={{fontSize:12,color:t.textSecondary,marginLeft:"auto"}}>{filtered.length} film{filtered.length!==1?"s":""}</span>
               {tab==="watchlist"&&filtered.length>0&&(
-                <button onClick={()=>openFilm(filtered[Math.floor(Math.random()*filtered.length)])} title="Pick a random film" style={{background:t.bgSecondary,border:`1px solid ${t.border}`,borderRadius:6,padding:"5px 10px",cursor:"pointer",color:t.textSecondary,fontSize:12,whiteSpace:"nowrap"}}>🎲 Random</button>
+                <button onClick={()=>openFilm(filtered[Math.floor(Math.random()*filtered.length)])} style={{background:t.bgSecondary,border:`1px solid ${t.border}`,borderRadius:6,padding:"5px 10px",cursor:"pointer",color:t.textSecondary,fontSize:12,whiteSpace:"nowrap"}}>🎲 Random</button>
               )}
               <div style={{display:"flex",gap:4}}>
                 <button onClick={()=>setViewMode("grid")} style={{background:viewMode==="grid"?t.accent:t.bgSecondary,border:`1px solid ${t.border}`,borderRadius:6,padding:"5px 9px",cursor:"pointer",color:viewMode==="grid"?t.accentText:t.textSecondary,fontSize:14,lineHeight:1}}>⊞</button>
@@ -1088,15 +1356,20 @@ function AppInner(){
             onAdd={addFilm} existingFilms={films} showToast={showToast}
           />
         )}
+        {showImportExport&&(
+          <ImportExportModal
+            onClose={()=>setShowImportExport(false)}
+            films={films}
+            onImportFilm={handleImportFilm}
+          />
+        )}
 
         {suggestionsLoading&&(
           <div style={{position:"fixed",bottom:28,left:"50%",transform:"translateX(-50%)",background:t.bgSecondary,border:`1px solid ${t.border}`,color:t.textSecondary,padding:"10px 18px",borderRadius:10,fontSize:13,zIndex:99998,display:"flex",alignItems:"center",gap:8,boxShadow:"0 4px 20px rgba(0,0,0,0.15)",pointerEvents:"none"}}>
             ⏳ Finding similar films…
           </div>
         )}
-
         {toast&&<Toast message={toast} onDone={()=>setToast(null)}/>}
-
       </div>
     </ThemeContext.Provider>
   );
