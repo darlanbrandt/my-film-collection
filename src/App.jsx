@@ -14,7 +14,6 @@ import { createClient } from "@supabase/supabase-js";
 
 // ─── CSS ──────────────────────────────────────────────────────────────────────
 const CINEMA_CSS = `
-body { font-family: 'Geist', system-ui, sans-serif; }
 .cine-root {
   --surface: #14141a;
   --surface-up: #1c1c24;
@@ -43,8 +42,9 @@ body { font-family: 'Geist', system-ui, sans-serif; }
              text-transform: uppercase; }
 .cine-root.page { width:100%; min-height:100vh; height:auto; overflow:visible;
                   max-width:1320px; margin:0 auto; padding-bottom:64px; }
-body.cine-host { background:#14141a; transition:background .25s; margin:0; }
-body.cine-host.light { background:#ece4d2; }
+body { font-family: 'Geist', system-ui, sans-serif; }
+body.cine-host { background:#ece4d2; transition:background .25s; margin:0; }
+body.cine-host.dark { background:#14141a; }
 
 /* Light mode */
 .cine-root.light {
@@ -73,7 +73,6 @@ body.cine-host.light { background:#ece4d2; }
 .cine-root.light .cc-poster { box-shadow:inset 0 0 0 0.5px rgba(0,0,0,0.06),0 2px 6px rgba(0,0,0,0.12); }
 .cine-root.light .cc.oscar .cc-poster { box-shadow:0 0 0 1.5px var(--oscar),0 0 12px rgba(180,138,48,0.25),0 4px 12px rgba(0,0,0,0.12); }
 .cine-root.light .cm-btn.primary { color:#faf6e9; }
-.cine-root.light .cc:hover .cc-glow { opacity:0.3; }
 .cine-root.light .sg { background:rgba(236,228,210,0.6); }
 .cine-root.light .sg-card .pst { box-shadow:inset 0 0 0 0.5px rgba(0,0,0,0.06),0 2px 6px rgba(0,0,0,0.12); }
 .cine-root.light .sc { background:rgba(236,228,210,0.7); }
@@ -114,7 +113,8 @@ body.cine-host.light { background:#ece4d2; }
 .cf { padding:18px 36px; display:flex; justify-content:space-between; align-items:center; gap:16px;
       flex-wrap:wrap; }
 .cf-left { display:flex; gap:8px; align-items:center; flex:1; min-width:0; flex-wrap:wrap; }
-.cf-chips { display:flex; gap:6px; flex-wrap:wrap; }
+.cf-chips { display:flex; gap:6px; overflow-x:auto; flex-wrap:nowrap; padding-bottom:4px; scrollbar-width:none; }
+.cf-chips::-webkit-scrollbar { display:none; }
 .cf-chip { font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.16em; text-transform:uppercase;
            padding:8px 14px; border:0; border-radius:6px; background:var(--surface); color:var(--ink-dim);
            cursor:pointer; box-shadow:var(--shadow-raised-sm); transition:all .15s; white-space:nowrap; }
@@ -162,7 +162,8 @@ body.cine-host.light { background:#ece4d2; }
 .cc { background:var(--surface); border-radius:10px; padding:8px 8px 10px;
       box-shadow:var(--shadow-raised); cursor:pointer; transition:all .2s; position:relative; }
 .cc:hover { transform:translateY(-3px); }
-.cc:hover .cc-glow { opacity:1; }
+.cc:hover .cc-glow { opacity:0.22; }
+.cine-root.light .cc:hover .cc-glow { opacity:0.3; }
 .cc-glow { position:absolute; inset:-2px; border-radius:12px; background:var(--accent);
            opacity:0; filter:blur(20px); z-index:-1; transition:opacity .25s; }
 .cc-poster { aspect-ratio:2/3; border-radius:5px; overflow:hidden;
@@ -183,6 +184,11 @@ body.cine-host.light { background:#ece4d2; }
           backdrop-filter:blur(6px); border-radius:4px; padding:4px 7px; color:var(--oscar);
           font-family:'Geist Mono',monospace; font-size:8.5px; letter-spacing:0.14em;
           display:inline-flex; gap:4px; align-items:center; box-shadow:0 0 0 0.5px rgba(240,184,74,0.4); }
+.cc-rew { position:absolute; top:12px; left:12px; background:rgba(20,20,26,0.85);
+          backdrop-filter:blur(6px); border-radius:4px; padding:4px 7px; color:#6a8a4a;
+          font-family:'Geist Mono',monospace; font-size:8.5px; letter-spacing:0.14em;
+          display:inline-flex; gap:4px; align-items:center; box-shadow:0 0 0 0.5px rgba(106,138,74,0.5); }
+.cine-root.light .cc-rew { background:rgba(255,251,238,0.85); }
 /* List row */
 .cc.list-row { display:flex; align-items:center; gap:12px; padding:8px 12px;
                border-radius:8px; box-shadow:var(--shadow-raised-sm); aspect-ratio:unset; }
@@ -196,7 +202,7 @@ body.cine-host.light { background:#ece4d2; }
 .cm { position:absolute; inset:0; background:rgba(8,8,12,0.65); backdrop-filter:blur(14px);
       animation:cm-fade .25s ease both; z-index:10; overflow:auto; }
 .cine-root.page .cm { position:fixed; }
-.cine-root.page .cm-sheet { min-height:100vh; }
+.cine-root.page .cm-sheet { min-height:100vh; max-width:1320px; margin:0 auto; }
 @keyframes cm-fade { from { opacity:0; } to { opacity:1; } }
 @keyframes cm-enter { from { opacity:0; transform:scale(0.96) translateY(8px); } to { opacity:1; transform:none; } }
 @keyframes kburn { 0% { transform:scale(1.04) translate(-1%,-0.6%); } 100% { transform:scale(1.15) translate(1.2%,0.8%); } }
@@ -259,10 +265,14 @@ body.cine-host.light { background:#ece4d2; }
 .cm-btn { padding:13px 22px; border:0; border-radius:8px; background:var(--surface);
           box-shadow:var(--shadow-raised-sm); font-family:'Geist Mono',monospace; font-size:10px;
           letter-spacing:0.18em; text-transform:uppercase; color:var(--ink-dim); cursor:pointer; transition:all .15s; }
-.cm-btn:hover { color:var(--ink); }
+.cm-btn:hover { color:var(--ink); box-shadow:var(--shadow-pressed-sm); background:color-mix(in oklch, var(--surface), white 6%); }
+.cine-root.light .cm-btn:hover { background:color-mix(in oklch, var(--surface), black 5%); }
 .cm-btn.primary { background:var(--accent); color:#1a1208;
                   box-shadow:-2px -2px 6px rgba(255,255,255,0.06),4px 4px 12px rgba(0,0,0,0.7),
                               0 0 20px color-mix(in oklch, var(--accent), transparent 60%); }
+.cm-btn.primary:hover { background:color-mix(in oklch, var(--accent), white 12%); color:#1a1208; box-shadow:-2px -2px 6px rgba(255,255,255,0.08),4px 4px 14px rgba(0,0,0,0.7); }
+.cm-btn.danger { color:#c84a4a; }
+.cm-btn.danger:hover { color:#e05a5a; background:rgba(200,60,60,0.1); box-shadow:var(--shadow-pressed-sm); }
 
 /* Stats */
 .cs { padding:6px 36px 36px; display:grid; grid-template-columns:repeat(12,1fr); gap:14px; }
@@ -345,7 +355,7 @@ body.cine-host.light { background:#ece4d2; }
 .sg-close { width:38px; height:38px; border-radius:8px; border:0; background:var(--surface);
             box-shadow:var(--shadow-raised-sm); cursor:pointer; color:var(--ink); font-size:18px; }
 .sg-body { padding:24px 32px 32px; overflow-y:auto; flex:1; min-height:0; }
-.sg-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:20px; }
+.sg-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:20px; max-width:760px; margin:0 auto; }
 .sg-card { background:var(--surface); border-radius:12px; padding:8px 8px 10px;
            box-shadow:var(--shadow-raised); position:relative; transition:transform .2s; }
 .sg-card:hover { transform:translateY(-3px); }
@@ -712,7 +722,10 @@ function useStats(watchedFilms) {
   const ratedFilms     = watchedFilms.filter(f=>f.imdbRating);
   const avgRating      = ratedFilms.length?(ratedFilms.reduce((s,f)=>s+parseFloat(f.imdbRating),0)/ratedFilms.length).toFixed(1):"-";
   const bestPicCount   = watchedFilms.filter(f=>Number(f.awards)>=1).length;
-  return {byDecade,byGenre,byDirector,byCountry,totalOscars,totalHours,avgRating,bestPicCount};
+  const withRuntime    = watchedFilms.filter(f=>parseRuntime(f.runtime)>0);
+  const longestFilm    = withRuntime.length?withRuntime.reduce((a,b)=>parseRuntime(a.runtime)>parseRuntime(b.runtime)?a:b):null;
+  const shortestFilm   = withRuntime.length?withRuntime.reduce((a,b)=>parseRuntime(a.runtime)<parseRuntime(b.runtime)?a:b):null;
+  return {byDecade,byGenre,byDirector,byCountry,totalOscars,totalHours,avgRating,bestPicCount,longestFilm,shortestFilm};
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -868,6 +881,7 @@ function FilmCard({ film, onSelect, layout='classic' }) {
     <div className={`cc classic ${isOscar ? 'oscar' : ''}`} onClick={() => onSelect(film)}>
       <div className="cc-glow"/>
       {isOscar && <span className="cc-osc">{Ico.osc} ×{f.oscars}</span>}
+      {f.rewatched && <span className="cc-rew">↩ Rew</span>}
       <div className="cc-poster"><PosterImg film={f}/></div>
       <div className="cc-meta">
         <h3 className="cc-title">{f.title}</h3>
@@ -991,9 +1005,9 @@ function CinemaModal({ film, onClose, onPrev, onNext, onFindSimilar, onShareCard
                   <button className="cm-btn" onClick={() => { onShareCard(); onClose(); }}>Share Card</button>
                   <button className="cm-btn" onClick={() => { onEdit(); onClose(); }}>Edit Entry</button>
                   {!confirmRemove
-                    ? <button className="cm-btn" style={{color:'#e05a5a'}} onClick={() => setConfirmRemove(true)}>Remove</button>
+                    ? <button className="cm-btn danger" onClick={() => setConfirmRemove(true)}>Remove</button>
                     : <>
-                        <button className="cm-btn" style={{color:'#e05a5a',boxShadow:'var(--shadow-pressed-sm)'}}
+                        <button className="cm-btn danger" style={{boxShadow:'var(--shadow-pressed-sm)'}}
                           onClick={() => { onRemove(film.id); onClose(); }}>Confirm remove</button>
                         <button className="cm-btn" onClick={() => setConfirmRemove(false)}>Cancel</button>
                       </>
@@ -1114,6 +1128,7 @@ function ShareCardModal({ film, onClose }) {
 
   useEffect(() => {
     (async () => {
+      await document.fonts.ready;
       const canvas = canvasRef.current;
       const ctx = canvas.getContext("2d");
       const W = 1080, H = 1920;
@@ -1145,20 +1160,20 @@ function ShareCardModal({ film, onClose }) {
           ctx.clip(); ctx.drawImage(pi, PX, PY, PW, PH); ctx.restore();
         } catch {}
       }
-      const tY = PY + PH + 70; ctx.textAlign = "center";
-      ctx.font = "bold 64px sans-serif"; ctx.fillStyle = "#ffffff";
+      const tY = PY + PH + 80; ctx.textAlign = "center";
+      ctx.font = "700 68px 'Bricolage Grotesque', sans-serif"; ctx.fillStyle = "#ffffff";
       let title = film.title; const maxW = W-120;
       while (ctx.measureText(title+"…").width > maxW && title.length > 0) title = title.slice(0,-1);
       if (title !== film.title) title += "…";
       ctx.fillText(title, W/2, tY);
       const meta = [film.year, typeof film.genre === 'string' ? film.genre.split(',')[0].trim() : (film.genre||[])[0]].filter(Boolean).join(' · ');
-      ctx.font = "36px sans-serif"; ctx.fillStyle = "rgba(255,255,255,0.55)"; ctx.fillText(meta, W/2, tY+72);
+      ctx.font = "400 34px 'Geist Mono', monospace"; ctx.fillStyle = "rgba(255,255,255,0.55)"; ctx.fillText(meta, W/2, tY+76);
       let eY = 0;
-      if (film.imdbRating) { ctx.font = "bold 42px sans-serif"; ctx.fillStyle = "#d4a04a"; ctx.fillText(`★ ${film.imdbRating} / 10  IMDb`, W/2, tY+152); eY = 60; }
-      if (Number(film.awards) > 0) { ctx.font = "36px sans-serif"; ctx.fillStyle = "#d4a04a"; ctx.fillText(`🏆 ${film.awards} Oscar${Number(film.awards)>1?"s":""}`, W/2, tY+152+eY); }
+      if (film.imdbRating) { ctx.font = "700 44px 'Geist Mono', monospace"; ctx.fillStyle = "#d4a04a"; ctx.fillText(`★ ${film.imdbRating} / 10  IMDb`, W/2, tY+158); eY = 66; }
+      if (Number(film.awards) > 0) { ctx.font = "400 36px 'Geist Mono', monospace"; ctx.fillStyle = "#d4a04a"; ctx.fillText(`🏆 ${film.awards} Oscar${Number(film.awards)>1?"s":""}`, W/2, tY+158+eY); }
       ctx.strokeStyle = "rgba(255,255,255,0.15)"; ctx.lineWidth = 1; ctx.beginPath();
       ctx.moveTo(W/2-120, H-160); ctx.lineTo(W/2+120, H-160); ctx.stroke();
-      ctx.font = "32px sans-serif"; ctx.fillStyle = "rgba(255,255,255,0.35)"; ctx.fillText("My Film Collection", W/2, H-110);
+      ctx.font = "400 26px 'Geist Mono', monospace"; ctx.fillStyle = "rgba(255,255,255,0.35)"; ctx.fillText("MY FILM COLLECTION", W/2, H-110);
       setGenerating(false); setReady(true);
     })();
   }, []);
@@ -1597,7 +1612,7 @@ function RandomPicker({ pool, onOpenFilm }) {
 
 // ─── Cinema Stats ─────────────────────────────────────────────────────────────
 function CinemaStats({ watchedFilms }) {
-  const { byDecade, byGenre, byDirector, byCountry, totalOscars, totalHours, avgRating, bestPicCount } = useStats(watchedFilms);
+  const { byDecade, byGenre, byDirector, byCountry, totalOscars, totalHours, avgRating, bestPicCount, longestFilm, shortestFilm } = useStats(watchedFilms);
   const BarChart = ({ rows, label }) => {
     const max = Math.max(...rows.map(r=>r[1]), 1);
     return (
@@ -1639,6 +1654,16 @@ function CinemaStats({ watchedFilms }) {
         <div style={{flex:1}}>
           <div className="l" style={{marginBottom:6}}>Across {bestPicCount} films</div>
         </div>
+      </div>
+      <div className="cs-card" style={{gridColumn:'span 3'}}>
+        <div className="l">Longest film</div>
+        <div style={{fontFamily:"'Bricolage Grotesque',sans-serif",fontVariationSettings:"'wdth' 85,'wght' 700",fontSize:20,lineHeight:1.2,marginTop:10,color:'var(--ink)',letterSpacing:'-0.02em'}}>{longestFilm?.title||'—'}</div>
+        <div className="vu">{longestFilm?.runtime||''}</div>
+      </div>
+      <div className="cs-card" style={{gridColumn:'span 3'}}>
+        <div className="l">Shortest film</div>
+        <div style={{fontFamily:"'Bricolage Grotesque',sans-serif",fontVariationSettings:"'wdth' 85,'wght' 700",fontSize:20,lineHeight:1.2,marginTop:10,color:'var(--ink)',letterSpacing:'-0.02em'}}>{shortestFilm?.title||'—'}</div>
+        <div className="vu">{shortestFilm?.runtime||''}</div>
       </div>
       <BarChart rows={byDecade} label="By decade"/>
       <BarChart rows={byGenre} label="By genre"/>
@@ -1694,12 +1719,17 @@ function AppInner() {
   }, []);
 
   // Theme — dark/light, persisted in localStorage
-  const [theme, setTheme] = useState(() => { try { return localStorage.getItem('mfc_cinema_theme')||'dark'; } catch { return 'dark'; } });
+  const [theme, setTheme] = useState(() => { try { return localStorage.getItem('mfc_cinema_theme')||'light'; } catch { return 'light'; } });
   useEffect(() => {
     try { localStorage.setItem('mfc_cinema_theme', theme); } catch {}
     document.body.classList.add('cine-host');
-    if (theme === 'light') document.body.classList.add('light');
-    else document.body.classList.remove('light');
+    if (theme === 'dark') {
+      document.body.classList.add('dark');
+      document.body.classList.remove('light');
+    } else {
+      document.body.classList.add('light');
+      document.body.classList.remove('dark');
+    }
   }, [theme]);
 
   const { films, loading, addFilm, updateFilm, removeFilm, toggleRewatch } = useFilms();
@@ -1718,6 +1748,7 @@ function AppInner() {
   const [search, setSearch] = useState('');
   const [filterDecade, setFilterDecade] = useState('all');
   const [sortBy, setSortBy] = useState('added');
+  const [sortDir, setSortDir] = useState('desc');
   const [viewMode, setViewMode] = useState('grid');
   const [page, setPage] = useState(1);
   const [selectedFilm, setSelectedFilm] = useState(null);
@@ -1731,7 +1762,7 @@ function AppInner() {
   const closeFilm = () => setSelectedFilm(null);
   useEffect(() => { if (!selectedFilm) window.scrollTo({ top: scrollRef.current, behavior: 'instant' }); }, [selectedFilm]);
 
-  useEffect(() => { setPage(1); }, [tab, search, filterDecade, sortBy]);
+  useEffect(() => { setPage(1); }, [tab, search, filterDecade, sortBy, sortDir]);
 
   const requireUnlock = (action) => { if (isUnlocked) action(); else { setPendingAction(()=>action); setShowPassword(true); } };
   const handleAddClick = () => requireUnlock(() => setShowAdd(true));
@@ -1775,14 +1806,20 @@ function AppInner() {
     return [...ds].sort((a,b) => b-a);
   }, [watchedFilms]);
 
-  const sortFilms = (arr, by) => {
+  const sortFilms = (arr, by, dir) => {
     const a = [...arr];
-    if (by === 'added') return a.sort((x,y) => new Date(y.created_at)-new Date(x.created_at));
-    if (by === 'title') return a.sort((x,y) => x.title.localeCompare(y.title));
-    if (by === 'year')  return a.sort((x,y) => parseInt(y.year)-parseInt(x.year));
-    if (by === 'rating') return a.sort((x,y) => parseFloat(y.imdbRating||0)-parseFloat(x.imdbRating||0));
-    if (by === 'oscars') return a.sort((x,y) => Number(y.awards)-Number(x.awards));
+    const flip = dir === 'asc' ? 1 : -1;
+    if (by === 'added') return a.sort((x,y) => flip * (new Date(x.created_at)-new Date(y.created_at)));
+    if (by === 'title') return a.sort((x,y) => flip * x.title.localeCompare(y.title));
+    if (by === 'year')  return a.sort((x,y) => flip * (parseInt(x.year)-parseInt(y.year)));
+    if (by === 'rating') return a.sort((x,y) => flip * (parseFloat(x.imdbRating||0)-parseFloat(y.imdbRating||0)));
+    if (by === 'oscars') return a.sort((x,y) => flip * (Number(x.awards)-Number(y.awards)));
     return a;
+  };
+  const sortDirLabel = () => {
+    if (sortBy === 'title') return sortDir === 'asc' ? 'A → Z' : 'Z → A';
+    if (sortBy === 'year') return sortDir === 'asc' ? 'Oldest first' : 'Newest first';
+    return sortDir === 'asc' ? 'Lowest first' : 'Highest first';
   };
 
   const filteredWatched = useMemo(() => {
@@ -1792,7 +1829,7 @@ function AppInner() {
       list = list.filter(f => [f.title,f.director,f.actors,f.country,f.genre].some(v=>v?.toLowerCase().includes(q)));
     }
     if (filterDecade !== 'all') list = list.filter(f => decadeOf(f.year) === filterDecade);
-    return sortFilms(list, sortBy);
+    return sortFilms(list, sortBy, sortDir);
   }, [watchedFilms, search, filterDecade, sortBy]);
 
   const paginated = filteredWatched.slice(0, page * PAGE_SIZE);
@@ -1841,8 +1878,8 @@ function AppInner() {
           </button>
         ))}
         {isUnlocked && (
-          <button className="ct-tab" style={{marginLeft:'auto',color:'var(--accent)'}} onClick={handleAddClick}>
-            {Ico.plus} <span style={{marginLeft:6}}>Add film</span>
+          <button className="cm-btn primary" style={{marginLeft:'auto', padding:'10px 20px'}} onClick={handleAddClick}>
+            + Add film
           </button>
         )}
       </div>
@@ -1867,7 +1904,7 @@ function AppInner() {
             <div className="cf-right">
               <div className="cf-sort">
                 <span>Sort by</span>
-                <select value={sortBy} onChange={e=>{setSortBy(e.target.value);setPage(1);}}>
+                <select value={sortBy} onChange={e=>{setSortBy(e.target.value);setSortDir('desc');setPage(1);}}>
                   <option value="added">Added</option>
                   <option value="title">Title</option>
                   <option value="year">Year</option>
@@ -1875,6 +1912,9 @@ function AppInner() {
                   <option value="oscars">Oscars</option>
                 </select>
               </div>
+              <button className="cf-chip" onClick={()=>setSortDir(d=>d==='asc'?'desc':'asc')} title="Toggle sort direction">
+                {sortDirLabel()}
+              </button>
               <span className="cf-count">{filteredWatched.length} film{filteredWatched.length!==1?'s':''}</span>
               <div className="cf-view">
                 <button className={viewMode==='grid'?'on':''} onClick={()=>setViewMode('grid')}>{Ico.grid}</button>
