@@ -809,7 +809,7 @@ const Ico = {
 
 // ─── ThemeToggle ──────────────────────────────────────────────────────────────
 function ThemeToggle({ value, onChange }) {
-  const isLight = value === 'dark';
+  const isLight = value === 'light';
   return (
     <button className={`th-toggle ${isLight ? 'is-light' : ''}`}
       onClick={() => onChange(isLight ? 'dark' : 'light')}
