@@ -31,8 +31,8 @@ body { font-family: 'Geist', system-ui, sans-serif; }
   --shadow-raised-sm: -2px -2px 6px var(--shadow-l), 3px 3px 8px var(--shadow-d);
   --shadow-pressed: inset -3px -3px 10px var(--shadow-l), inset 3px 3px 10px var(--shadow-d);
   --shadow-pressed-sm: inset -1px -1px 4px var(--shadow-l), inset 2px 2px 5px var(--shadow-d);
-  background: var(--surface);
-  color: var(--ink);
+  background: var(--ink);
+  color: var(--surface);
   font-family: 'Geist', system-ui, sans-serif;
   width: 100%; position: relative;
 }
