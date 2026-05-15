@@ -377,8 +377,12 @@ body.cine-host.dark { background:#14141a; }
 .sg-card .actions { padding:12px 4px 4px; display:flex; gap:6px; align-items:center; }
 .sg-card .add-btn { flex:1; padding:10px 8px; border:0; border-radius:6px; background:var(--accent);
                      color:#1a1208; font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.16em;
-                     text-transform:uppercase; cursor:pointer; font-weight:600;
-                     box-shadow:-1px -1px 3px rgba(255,255,255,0.05),2px 2px 6px rgba(0,0,0,0.4); }
+                     text-transform:uppercase; cursor:pointer; font-weight:600; transition:all .08s;
+                     box-shadow:-2px -2px 6px rgba(255,255,255,0.06),4px 4px 12px rgba(0,0,0,0.7),
+                                 0 0 20px color-mix(in oklch, var(--accent), transparent 60%); }
+.sg-card .add-btn:hover { background:color-mix(in oklch, var(--accent), white 12%); }
+.cine-root.light .sg-card .add-btn { box-shadow:-2px -2px 6px rgba(255,251,238,0.85),4px 4px 12px rgba(125,95,55,0.22),
+                                                 0 0 16px color-mix(in oklch, var(--accent), transparent 65%); }
 .sg-card .wl-toggle { width:34px; height:34px; border:0; border-radius:6px; background:var(--surface);
                        box-shadow:var(--shadow-raised-sm); cursor:pointer; color:var(--ink-soft);
                        display:flex; align-items:center; justify-content:center; flex-shrink:0; }
