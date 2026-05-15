@@ -131,6 +131,8 @@ body.cine-host.dark { background:#14141a; }
 .cf-sort select { appearance:none; background:transparent; border:0; color:var(--ink);
                   font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.1em;
                   text-transform:uppercase; cursor:pointer; padding-right:14px; }
+.cine-root select option { background:#1c1c24; color:#ecead8; }
+.cine-root.light select option { background:#f4ede0; color:#1a1610; }
 .cf-view { display:flex; gap:4px; }
 .cf-view button { font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.16em;
                   text-transform:uppercase; padding:8px 10px; border:0; border-radius:6px;
