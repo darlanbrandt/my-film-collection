@@ -365,8 +365,9 @@ body.cine-host.dark { background:#14141a; }
 .sg-card:hover { transform:translateY(-3px); }
 .sg-card .pst { aspect-ratio:2/3; border-radius:6px; overflow:hidden;
                 box-shadow:inset 0 0 0 0.5px rgba(255,255,255,0.04),0 2px 6px rgba(0,0,0,0.5); }
-.sg-card .ttl { font-family:'Bricolage Grotesque',sans-serif; font-size:14px; font-weight:600;
-                margin:10px 4px 4px; line-height:1.18; letter-spacing:-0.01em; }
+.sg-card .ttl { font-family:'Bricolage Grotesque',sans-serif; font-size:13px; font-weight:600;
+                margin:10px 4px 4px; line-height:1.18; letter-spacing:-0.01em;
+                white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .sg-card .meta { padding:0 4px; font-family:'Geist Mono',monospace; font-size:9px;
                   color:var(--ink-dim); letter-spacing:0.14em; text-transform:uppercase; }
 .sg-card .actions { padding:12px 4px 4px; display:flex; gap:6px; align-items:center; }
@@ -1166,17 +1167,26 @@ function ShareCardModal({ film, onClose }) {
           ctx.clip(); ctx.drawImage(pi, PX, PY, PW, PH); ctx.restore();
         } catch {}
       }
-      const tY = PY + PH + 80; ctx.textAlign = "center";
-      ctx.font = "700 68px 'Bricolage Grotesque', sans-serif"; ctx.fillStyle = "#ffffff";
-      let title = film.title; const maxW = W-120;
-      while (ctx.measureText(title+"…").width > maxW && title.length > 0) title = title.slice(0,-1);
+      const tY = PY + PH + 100; ctx.textAlign = "center";
+      // Dynamic title font size — shrink for long titles
+      let titleFontSize = 80;
+      ctx.font = `700 ${titleFontSize}px 'Bricolage Grotesque', sans-serif`;
+      let title = film.title;
+      const maxW = W - 100;
+      while (ctx.measureText(title).width > maxW && titleFontSize > 44) {
+        titleFontSize -= 4;
+        ctx.font = `700 ${titleFontSize}px 'Bricolage Grotesque', sans-serif`;
+      }
+      // If still too wide, truncate with ellipsis
+      while (ctx.measureText(title + "…").width > maxW && title.length > 0) title = title.slice(0, -1);
       if (title !== film.title) title += "…";
+      ctx.fillStyle = "#ffffff";
       ctx.fillText(title, W/2, tY);
       const meta = [film.year, typeof film.genre === 'string' ? film.genre.split(',')[0].trim() : (film.genre||[])[0]].filter(Boolean).join(' · ');
-      ctx.font = "400 34px 'Geist Mono', monospace"; ctx.fillStyle = "rgba(255,255,255,0.55)"; ctx.fillText(meta, W/2, tY+76);
+      ctx.font = "400 34px 'Geist Mono', monospace"; ctx.fillStyle = "rgba(255,255,255,0.55)"; ctx.fillText(meta, W/2, tY+86);
       let eY = 0;
-      if (film.imdbRating) { ctx.font = "700 44px 'Geist Mono', monospace"; ctx.fillStyle = "#d4a04a"; ctx.fillText(`★ ${film.imdbRating} / 10  IMDb`, W/2, tY+158); eY = 66; }
-      if (Number(film.awards) > 0) { ctx.font = "400 36px 'Geist Mono', monospace"; ctx.fillStyle = "#d4a04a"; ctx.fillText(`🏆 ${film.awards} Oscar${Number(film.awards)>1?"s":""}`, W/2, tY+158+eY); }
+      if (film.imdbRating) { ctx.font = "700 44px 'Geist Mono', monospace"; ctx.fillStyle = "#d4a04a"; ctx.fillText(`★ ${film.imdbRating} / 10  IMDb`, W/2, tY+168); eY = 66; }
+      if (Number(film.awards) > 0) { ctx.font = "400 36px 'Geist Mono', monospace"; ctx.fillStyle = "#d4a04a"; ctx.fillText(`🏆 ${film.awards} Oscar${Number(film.awards)>1?"s":""}`, W/2, tY+168+eY); }
       ctx.strokeStyle = "rgba(255,255,255,0.15)"; ctx.lineWidth = 1; ctx.beginPath();
       ctx.moveTo(W/2-120, H-160); ctx.lineTo(W/2+120, H-160); ctx.stroke();
       ctx.font = "400 26px 'Geist Mono', monospace"; ctx.fillStyle = "rgba(255,255,255,0.35)"; ctx.fillText("MY FILM COLLECTION", W/2, H-110);
@@ -1744,6 +1754,7 @@ function AppInner() {
   const [search, setSearch] = useState('');
   const [filterDecade, setFilterDecade] = useState('all');
   const [sortBy, setSortBy] = useState('added');
+  const [sortDir, setSortDir] = useState('desc');
   const [viewMode, setViewMode] = useState('grid');
   const [page, setPage] = useState(1);
   const [selectedFilm, setSelectedFilm] = useState(null);
@@ -1757,7 +1768,7 @@ function AppInner() {
   const closeFilm = () => setSelectedFilm(null);
   useEffect(() => { if (!selectedFilm) window.scrollTo({ top: scrollRef.current, behavior: 'instant' }); }, [selectedFilm]);
 
-  useEffect(() => { setPage(1); }, [tab, search, filterDecade, sortBy]);
+  useEffect(() => { setPage(1); }, [tab, search, filterDecade, sortBy, sortDir]);
 
   const requireUnlock = (action) => { if (isUnlocked) action(); else { setPendingAction(()=>action); setShowPassword(true); } };
   const handleAddClick = () => requireUnlock(() => setShowAdd(true));
@@ -1803,11 +1814,12 @@ function AppInner() {
 
   const sortFilms = (arr, by) => {
     const a = [...arr];
-    if (by === 'added') return a.sort((x,y) => new Date(y.created_at)-new Date(x.created_at));
-    if (by === 'title') return a.sort((x,y) => x.title.localeCompare(y.title));
-    if (by === 'year')  return a.sort((x,y) => parseInt(y.year)-parseInt(x.year));
-    if (by === 'rating') return a.sort((x,y) => parseFloat(y.imdbRating||0)-parseFloat(x.imdbRating||0));
-    if (by === 'oscars') return a.sort((x,y) => Number(y.awards)-Number(x.awards));
+    const d = sortDir === 'asc' ? 1 : -1;
+    if (by === 'added') return a.sort((x,y) => d * (new Date(x.created_at)-new Date(y.created_at)));
+    if (by === 'title') return a.sort((x,y) => d * x.title.localeCompare(y.title));
+    if (by === 'year')  return a.sort((x,y) => d * (parseInt(x.year)-parseInt(y.year)));
+    if (by === 'rating') return a.sort((x,y) => d * (parseFloat(x.imdbRating||0)-parseFloat(y.imdbRating||0)));
+    if (by === 'oscars') return a.sort((x,y) => d * (Number(x.awards)-Number(y.awards)));
     return a;
   };
 
@@ -1894,7 +1906,7 @@ function AppInner() {
             <div className="cf-right">
               <div className="cf-sort">
                 <span>Sort by</span>
-                <select value={sortBy} onChange={e=>{setSortBy(e.target.value);setPage(1);}}>
+                <select value={sortBy} onChange={e=>{setSortBy(e.target.value);setSortDir('desc');setPage(1);}}>
                   <option value="added">Added</option>
                   <option value="title">Title</option>
                   <option value="year">Year</option>
@@ -1902,6 +1914,9 @@ function AppInner() {
                   <option value="oscars">Oscars</option>
                 </select>
               </div>
+              <button className="cf-chip" onClick={()=>setSortDir(d=>d==='asc'?'desc':'asc')} title="Toggle sort direction" style={{fontSize:14,padding:'6px 10px'}}>
+                {sortDir==='desc'?'↓':'↑'}
+              </button>
               <span className="cf-count">{filteredWatched.length} film{filteredWatched.length!==1?'s':''}</span>
               <div className="cf-view">
                 <button className={viewMode==='grid'?'on':''} onClick={()=>setViewMode('grid')}>{Ico.grid}</button>
