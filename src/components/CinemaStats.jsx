@@ -60,7 +60,7 @@ export function CinemaStats({ watchedFilms }) {
 
       <div className="cs-card cs-chart" style={{ gridColumn:'span 12' }}>
         <h4>By country of origin</h4>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:'8px 32px' }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(220px, 1fr))', gap:'8px 32px' }}>
           {byCountry.map(([c, n]) => {
             const max = Math.max(...byCountry.map(r => r[1]), 1);
             return (

@@ -528,6 +528,11 @@
       .cine-root.page .cm-title { font-size:32px; }
       .cine-root.page .cm-stats { grid-template-columns:repeat(2,1fr); }
       .cine-root.page .cs { grid-template-columns:1fr; padding:6px 18px 22px; }
+      .cine-root.page .cs > * { grid-column:1 / -1 !important; }
+      .cine-root.page .cs-card .v { font-size:40px; }
+      .cine-root.page .cs-osc-card .num-big { font-size:48px; }
+      .cine-root.page .cs-bar-row .name { width:90px; font-size:12px; }
+      .cine-root.page .cs-card.cs-chart > div[style*="repeat(2"] { grid-template-columns:1fr !important; }
       .cine-root.page .cs .cs-card,
       .cine-root.page .cs .cs-chart { grid-column:span 1 !important; }
       .cine-root.page .sg-grid { flex-wrap:wrap; justify-content:center; gap:10px; }
