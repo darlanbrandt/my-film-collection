@@ -1758,6 +1758,7 @@ function AppInner() {
   const [sortBy, setSortBy] = useState('added');
   const [sortDir, setSortDir] = useState('desc');
   const [viewMode, setViewMode] = useState('grid');
+  const [gridDensity, setGridDensity] = useState('compact');
   const [watchedPage, setWatchedPage] = useState(1);
   const [wlPage, setWlPage] = useState(1);
   const [selectedFilm, setSelectedFilm] = useState(null);
@@ -1949,6 +1950,16 @@ function AppInner() {
               <div className="cf-view">
                 <button className={viewMode==='grid'?'on':''} onClick={()=>setViewMode('grid')}>{Ico.grid}</button>
                 <button className={viewMode==='list'?'on':''} onClick={()=>setViewMode('list')}>{Ico.list}</button>
+                {viewMode==='grid' && (
+                  <button
+                    className={gridDensity==='comfy'?'on':''}
+                    onClick={()=>setGridDensity(d=>d==='compact'?'comfy':'compact')}
+                    title={gridDensity==='compact'?'Switch to 4 columns':'Switch to 6 columns'}
+                    style={{minWidth:28}}
+                  >
+                    {gridDensity==='compact'?'4':'6'}
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -1957,7 +1968,7 @@ function AppInner() {
             <EmptyState isWatchlist={false} onAdd={handleAddClick} isUnlocked={isUnlocked}/>
           ) : (
             <div className="cg-wrap">
-              <div className={viewMode==='list' ? 'cg d-list' : 'cg d-compact'}>
+              <div className={viewMode==='list' ? 'cg d-list' : `cg d-${gridDensity}`}>
                 {paginated.map(f => <FilmCard key={f.id} film={f} onSelect={openFilm} layout={viewMode==='list'?'list':'classic'}/>)}
               </div>
               {hasMore && <div ref={watchedSentinel} style={{height:1}}/>}
