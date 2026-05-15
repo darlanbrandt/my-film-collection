@@ -9,7 +9,7 @@
  * And set: body { font-family: 'Geist', system-ui, sans-serif; }
  */
 
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 // ─── CSS ──────────────────────────────────────────────────────────────────────
@@ -1756,7 +1756,8 @@ function AppInner() {
   const [sortBy, setSortBy] = useState('added');
   const [sortDir, setSortDir] = useState('desc');
   const [viewMode, setViewMode] = useState('grid');
-  const [page, setPage] = useState(1);
+  const [watchedPage, setWatchedPage] = useState(1);
+  const [wlPage, setWlPage] = useState(1);
   const [selectedFilm, setSelectedFilm] = useState(null);
   const [editFilm, setEditFilm] = useState(null);
   const [shareFilm, setShareFilm] = useState(null);
@@ -1764,12 +1765,34 @@ function AppInner() {
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
 
   const scrollRef = useRef(0);
-  const sentinelRef = useRef(null);
+  const watchedObsRef = useRef(null);
+  const wlObsRef = useRef(null);
+
+  const watchedSentinel = useCallback((node) => {
+    if (watchedObsRef.current) { watchedObsRef.current.disconnect(); watchedObsRef.current = null; }
+    if (!node) return;
+    watchedObsRef.current = new IntersectionObserver(
+      ([e]) => { if (e.isIntersecting) setWatchedPage(p => p + 1); },
+      { rootMargin: '200px' }
+    );
+    watchedObsRef.current.observe(node);
+  }, []);
+
+  const wlSentinel = useCallback((node) => {
+    if (wlObsRef.current) { wlObsRef.current.disconnect(); wlObsRef.current = null; }
+    if (!node) return;
+    wlObsRef.current = new IntersectionObserver(
+      ([e]) => { if (e.isIntersecting) setWlPage(p => p + 1); },
+      { rootMargin: '200px' }
+    );
+    wlObsRef.current.observe(node);
+  }, []);
   const openFilm = (film) => { scrollRef.current = window.scrollY; setSelectedFilm(film); };
   const closeFilm = () => setSelectedFilm(null);
   useEffect(() => { if (!selectedFilm) window.scrollTo({ top: scrollRef.current, behavior: 'instant' }); }, [selectedFilm]);
 
-  useEffect(() => { setPage(1); }, [tab, search, filterDecade, sortBy, sortDir]);
+  useEffect(() => { setWatchedPage(1); }, [tab, search, filterDecade, sortBy, sortDir]);
+  useEffect(() => { setWlPage(1); }, [tab]);
 
   const requireUnlock = (action) => { if (isUnlocked) action(); else { setPendingAction(()=>action); setShowPassword(true); } };
   const handleAddClick = () => requireUnlock(() => setShowAdd(true));
@@ -1834,20 +1857,10 @@ function AppInner() {
     return sortFilms(list, sortBy);
   }, [watchedFilms, search, filterDecade, sortBy]);
 
-  const paginated = filteredWatched.slice(0, page * PAGE_SIZE);
+  const paginated = filteredWatched.slice(0, watchedPage * PAGE_SIZE);
   const hasMore = paginated.length < filteredWatched.length;
-
-  // Infinite scroll — fires when sentinel enters viewport
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel || !hasMore) return;
-    const observer = new IntersectionObserver(
-      (entries) => { if (entries[0].isIntersecting) setPage(p => p + 1); },
-      { rootMargin: '200px' }
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [hasMore, page]);
+  const paginatedWl = watchlistFilms.slice(0, wlPage * PAGE_SIZE);
+  const wlHasMore = paginatedWl.length < watchlistFilms.length;
 
   // For modal prev/next
   const activeList = tab === 'watchlist' ? watchlistFilms : filteredWatched;
@@ -1919,7 +1932,7 @@ function AppInner() {
             <div className="cf-right">
               <div className="cf-sort">
                 <span>Sort by</span>
-                <select value={sortBy} onChange={e=>{setSortBy(e.target.value);setSortDir('desc');setPage(1);}}>
+                <select value={sortBy} onChange={e=>{setSortBy(e.target.value);setSortDir('desc');setWatchedPage(1);}}>
                   <option value="added">Added</option>
                   <option value="title">Title</option>
                   <option value="year">Year</option>
@@ -1945,7 +1958,7 @@ function AppInner() {
               <div className={viewMode==='list' ? 'cg d-list' : 'cg d-compact'}>
                 {paginated.map(f => <FilmCard key={f.id} film={f} onSelect={openFilm} layout={viewMode==='list'?'list':'classic'}/>)}
               </div>
-              {hasMore && <div ref={sentinelRef} style={{height:1}}/>}
+              {hasMore && <div ref={watchedSentinel} style={{height:1}}/>}
             </div>
           )}
         </>
@@ -1964,8 +1977,9 @@ function AppInner() {
                   <span className="cr-label">Queued — {watchlistFilms.length} films</span>
                 </div>
                 <div className="cg d-comfy" style={{gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))'}}>
-                  {watchlistFilms.map(f => <FilmCard key={f.id} film={f} onSelect={openFilm}/>)}
+                  {paginatedWl.map(f => <FilmCard key={f.id} film={f} onSelect={openFilm}/>)}
                 </div>
+                {wlHasMore && <div ref={wlSentinel} style={{height:1}}/>}
               </div>
             </>
           )}
