@@ -410,10 +410,16 @@
                  font-size:24px; margin:0; letter-spacing:-0.02em; }
     .af-search { display:flex; align-items:center; padding:14px 18px; background:var(--surface);
                   border-radius:10px; box-shadow:var(--shadow-pressed-sm); gap:12px; margin-bottom:18px;
-                  color:var(--ink-soft); flex-shrink:0; }
+                  color:var(--ink-soft); flex-shrink:0; flex-wrap:wrap; }
     .af-search input { flex:1; border:0; background:transparent; color:var(--ink); font:inherit;
-                        font-size:14px; outline:none; }
+                        font-size:14px; outline:none; min-width:100px; }
     .af-search input::placeholder { color:var(--ink-soft); }
+    @media (max-width:720px) {
+      .af-search { flex-direction:column; align-items:stretch; gap:10px; }
+      .af-search input { min-width:0; width:100%; }
+      .af-search button { width:100%; padding:11px 14px !important; }
+      .af-search > svg { display:none; }
+    }
     .af-list { display:flex; flex-direction:column; gap:10px; overflow-y:auto; flex:1; min-height:0; }
     .af-row { display:flex; gap:14px; padding:10px; background:var(--surface); border-radius:10px;
               box-shadow:var(--shadow-raised-sm); cursor:pointer; transition:transform .15s; align-items:flex-start;
