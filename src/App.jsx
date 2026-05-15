@@ -560,7 +560,7 @@ const TMDB_BACKDROP = "https://image.tmdb.org/t/p/w1280";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase = SUPABASE_URL && SUPABASE_KEY ? createClient(SUPABASE_URL, SUPABASE_KEY) : null;
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 24;
 
 // ─── Mappers (data layer — unchanged) ────────────────────────────────────────
 function rowToFilm(row) {
@@ -1764,9 +1764,22 @@ function AppInner() {
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
 
   const scrollRef = useRef(0);
+  const sentinelRef = useRef(null);
   const openFilm = (film) => { scrollRef.current = window.scrollY; setSelectedFilm(film); };
   const closeFilm = () => setSelectedFilm(null);
   useEffect(() => { if (!selectedFilm) window.scrollTo({ top: scrollRef.current, behavior: 'instant' }); }, [selectedFilm]);
+
+  // Infinite scroll — fires when sentinel enters viewport
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => { if (entries[0].isIntersecting) setPage(p => p + 1); },
+      { rootMargin: '200px' }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [filteredWatched.length, page]);
 
   useEffect(() => { setPage(1); }, [tab, search, filterDecade, sortBy, sortDir]);
 
@@ -1932,13 +1945,7 @@ function AppInner() {
               <div className={viewMode==='list' ? 'cg d-list' : 'cg d-compact'}>
                 {paginated.map(f => <FilmCard key={f.id} film={f} onSelect={openFilm} layout={viewMode==='list'?'list':'classic'}/>)}
               </div>
-              {hasMore && (
-                <div style={{textAlign:'center',marginTop:24}}>
-                  <button className="cm-btn" onClick={()=>setPage(p=>p+1)}>
-                    Load more ({filteredWatched.length-paginated.length} remaining)
-                  </button>
-                </div>
-              )}
+              {hasMore && <div ref={sentinelRef} style={{height:1}}/>}
             </div>
           )}
         </>
