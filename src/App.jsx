@@ -1769,18 +1769,6 @@ function AppInner() {
   const closeFilm = () => setSelectedFilm(null);
   useEffect(() => { if (!selectedFilm) window.scrollTo({ top: scrollRef.current, behavior: 'instant' }); }, [selectedFilm]);
 
-  // Infinite scroll — fires when sentinel enters viewport
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
-    const observer = new IntersectionObserver(
-      (entries) => { if (entries[0].isIntersecting) setPage(p => p + 1); },
-      { rootMargin: '200px' }
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [filteredWatched.length, page]);
-
   useEffect(() => { setPage(1); }, [tab, search, filterDecade, sortBy, sortDir]);
 
   const requireUnlock = (action) => { if (isUnlocked) action(); else { setPendingAction(()=>action); setShowPassword(true); } };
@@ -1848,6 +1836,18 @@ function AppInner() {
 
   const paginated = filteredWatched.slice(0, page * PAGE_SIZE);
   const hasMore = paginated.length < filteredWatched.length;
+
+  // Infinite scroll — fires when sentinel enters viewport
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !hasMore) return;
+    const observer = new IntersectionObserver(
+      (entries) => { if (entries[0].isIntersecting) setPage(p => p + 1); },
+      { rootMargin: '200px' }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, page]);
 
   // For modal prev/next
   const activeList = tab === 'watchlist' ? watchlistFilms : filteredWatched;
