@@ -267,7 +267,7 @@ body.cine-host.dark { background:#14141a; }
           box-shadow:var(--shadow-raised-sm); font-family:'Geist Mono',monospace; font-size:10px;
           letter-spacing:0.18em; text-transform:uppercase; color:var(--ink-dim); cursor:pointer; transition:all .08s; }
 .cm-btn:hover { color:var(--ink); box-shadow:var(--shadow-pressed-sm); background:color-mix(in oklch, var(--surface), white 6%); }
-.cine-root.light .cm-btn:hover { background:color-mix(in oklch, var(--surface), black 5%); }
+.cine-root.light .cm-btn:hover { background:color-mix(in oklch, var(--surface), black 2.5%); }
 .cm-btn.primary { background:var(--accent); color:#1a1208;
                   box-shadow:-2px -2px 6px rgba(255,255,255,0.06),4px 4px 12px rgba(0,0,0,0.7),
                               0 0 20px color-mix(in oklch, var(--accent), transparent 60%); }
