@@ -528,6 +528,8 @@
       .cine-root.page .cm-title { font-size:32px; }
       .cine-root.page .cm-stats { grid-template-columns:repeat(2,1fr); }
       .cine-root.page .cs { grid-template-columns:1fr; padding:6px 18px 22px; }
+      .cine-root.page .cs .cs-card,
+      .cine-root.page .cs .cs-chart { grid-column:span 1 !important; }
       .cine-root.page .sg-grid { flex-wrap:wrap; justify-content:center; gap:10px; }
       .cine-root.page .sg-card { width:calc(33% - 8px); min-width:100px; }
       .cine-root.page .sc-frame { flex-direction:column; padding:22px; }
