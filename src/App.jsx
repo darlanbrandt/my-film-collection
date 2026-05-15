@@ -328,23 +328,25 @@ body.cine-host.dark { background:#14141a; }
                         pointer-events:none; opacity:0.5; }
 
 /* Toast */
-.cine-toast-host { position:fixed; left:50%; bottom:36px; transform:translateX(-50%); z-index:9999;
+.cine-toast-host { position:fixed; left:50%; bottom:64px; transform:translateX(-50%); z-index:9999;
                    display:flex; flex-direction:column; gap:8px; align-items:center; pointer-events:none; }
 @keyframes toast-in { from { opacity:0; transform:translateY(20px) scale(0.96); } to { opacity:1; transform:none; } }
 @keyframes toast-out { to { opacity:0; transform:translateY(-6px); } }
-.cine-toast { background:var(--accent); color:#1a1208; padding:13px 22px 13px 18px; border-radius:10px;
+.cine-toast { background:var(--surface-up); color:var(--ink); padding:13px 22px 13px 18px; border-radius:10px;
               font-family:'Geist Mono',monospace; font-size:10.5px; letter-spacing:0.16em;
               text-transform:uppercase; font-weight:500;
               box-shadow:-2px -2px 6px rgba(255,255,255,0.06),4px 4px 14px rgba(0,0,0,0.5),
-                          0 0 28px color-mix(in oklch, var(--accent), transparent 55%);
+                          0 0 0 1px var(--line);
               animation:toast-in .3s cubic-bezier(.2,.7,.2,1) both; display:flex; align-items:center; gap:10px; }
+.cine-toast .toast-dot { width:8px; height:8px; border-radius:50%; background:var(--accent);
+                          box-shadow:0 0 8px var(--accent); flex-shrink:0; }
 .cine-toast.leaving { animation:toast-out .25s ease both; }
 
 /* Suggestions slide-up */
 .sg { position:fixed; inset:0; background:rgba(8,8,12,0.6); backdrop-filter:blur(14px);
       z-index:200; display:flex; flex-direction:column; justify-content:flex-end; animation:cm-fade .25s ease both; }
 @keyframes sg-up { from { transform:translateY(100%); } to { transform:none; } }
-.sg-sheet { background:var(--surface); border-radius:24px 24px 0 0; max-height:78vh; display:flex;
+.sg-sheet { background:var(--surface); border-radius:24px 24px 0 0; max-height:92vh; display:flex;
             flex-direction:column; box-shadow:0 -16px 60px rgba(0,0,0,0.5);
             animation:sg-up .42s cubic-bezier(.2,.7,.2,1) both; overflow:hidden; }
 .sg-hd { padding:14px 32px 18px; display:flex; flex-direction:column; align-items:center; gap:14px;
@@ -359,11 +361,11 @@ body.cine-host.dark { background:#14141a; }
 .sg-titlerow .sg-opts { display:flex; align-items:center; gap:10px; }
 .sg-close { width:38px; height:38px; border-radius:8px; border:0; background:var(--surface);
             box-shadow:var(--shadow-raised-sm); cursor:pointer; color:var(--ink); font-size:18px; }
-.sg-body { padding:24px 32px 32px; overflow-y:auto; flex:1; min-height:0; }
-.sg-grid { display:flex; flex-wrap:nowrap; justify-content:center; gap:14px; }
+.sg-body { padding:20px 24px 28px; overflow-y:auto; flex:1; min-height:0; }
+.sg-grid { display:flex; flex-wrap:nowrap; justify-content:center; gap:12px; }
 .sg-card { background:var(--surface); border-radius:12px; padding:8px 8px 10px;
            box-shadow:var(--shadow-raised); position:relative; transition:transform .2s;
-           width:160px; flex-shrink:0; }
+           width:clamp(110px, 16vw, 160px); flex-shrink:0; }
 .sg-card:hover { transform:translateY(-3px); }
 .sg-card .pst { aspect-ratio:2/3; border-radius:6px; overflow:hidden;
                 box-shadow:inset 0 0 0 0.5px rgba(255,255,255,0.04),0 2px 6px rgba(0,0,0,0.5); }
@@ -529,7 +531,8 @@ body.cine-host.dark { background:#14141a; }
   .cine-root.page .cm-title { font-size:32px; }
   .cine-root.page .cm-stats { grid-template-columns:repeat(2,1fr); }
   .cine-root.page .cs { grid-template-columns:1fr; padding:6px 18px 22px; }
-  .cine-root.page .sg-grid { flex-wrap:wrap; justify-content:center; gap:14px; }
+  .cine-root.page .sg-grid { flex-wrap:wrap; justify-content:center; gap:10px; }
+  .cine-root.page .sg-card { width:calc(33% - 8px); min-width:100px; }
   .cine-root.page .sc-frame { flex-direction:column; padding:22px; }
 }
 `;
@@ -853,7 +856,7 @@ function ToastHost() {
     <div className="cine-toast-host">
       {items.map(t => (
         <div key={t.id} className={`cine-toast ${t.leaving ? 'leaving' : ''}`}>
-          {t.icon || Ico.check}
+          <span className="toast-dot"/>
           <span>{t.msg}</span>
         </div>
       ))}
@@ -1028,11 +1031,13 @@ function CinemaModal({ film, onClose, onPrev, onNext, onFindSimilar, onShareCard
 
 // ─── Suggestions Sheet ────────────────────────────────────────────────────────
 function SuggestionsSheet({ basedOn, picks: initialPicks, existingFilms, onClose, onAdd, showToast }) {
+  const isMobile = window.innerWidth <= 720;
+  const maxPicks = isMobile ? 6 : 5;
   const [picks, setPicks] = useState(() => {
     const isDup = (title, year) => existingFilms.some(f =>
       f.title.trim().toLowerCase() === title.trim().toLowerCase() && String(f.year) === String(year)
     );
-    return initialPicks.filter(p => !isDup(p.title, p.year));
+    return initialPicks.slice(0, maxPicks).filter(p => !isDup(p.title, p.year));
   });
   const [loadingId, setLoadingId] = useState(null);
   const [addToWl, setAddToWl] = useState(false);
