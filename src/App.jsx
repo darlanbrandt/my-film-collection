@@ -98,6 +98,7 @@ function AppInner() {
   // Filters / sort
   const [search,       setSearch]       = useState('');
   const [filterDecade, setFilterDecade] = useState('all');
+  const [filterGenre,  setFilterGenre]  = useState('all');
   const [sortBy,       setSortBy]       = useState('added');
   const [sortDir,      setSortDir]      = useState('desc');
   const [viewMode,     setViewMode]     = useState('grid');
@@ -138,7 +139,7 @@ function AppInner() {
   }, []);
 
   // Reset pages when filters/tab change
-  useEffect(() => { setWatchedPage(1); }, [tab, search, filterDecade, sortBy, sortDir]);
+  useEffect(() => { setWatchedPage(1); }, [tab, search, filterDecade, filterGenre, sortBy, sortDir]);
   useEffect(() => { setWlPage(1); },      [tab]);
 
   // Auth helpers
@@ -183,6 +184,13 @@ function AppInner() {
     return [...ds].sort((a, b) => b - a);
   }, [watchedFilms]);
 
+  const allGenres = useMemo(() => {
+    const gs = new Set(watchedFilms.flatMap(f =>
+      (typeof f.genre === 'string' ? f.genre.split(',').map(g => g.trim()) : f.genre || []).filter(Boolean)
+    ));
+    return [...gs].sort((a, b) => a.localeCompare(b));
+  }, [watchedFilms]);
+
   const sortFilms = (arr, by) => {
     const a = [...arr];
     const d = sortDir === 'asc' ? 1 : -1;
@@ -201,8 +209,11 @@ function AppInner() {
       list = list.filter(f => [f.title, f.director, f.actors, f.country, f.genre].some(v => v?.toLowerCase().includes(q)));
     }
     if (filterDecade !== 'all') list = list.filter(f => decadeOf(f.year) === filterDecade);
+    if (filterGenre  !== 'all') list = list.filter(f =>
+      (typeof f.genre === 'string' ? f.genre.split(',').map(g => g.trim()) : f.genre || []).includes(filterGenre)
+    );
     return sortFilms(list, sortBy);
-  }, [watchedFilms, search, filterDecade, sortBy, sortDir]);
+  }, [watchedFilms, search, filterDecade, filterGenre, sortBy, sortDir]);
 
   const paginated   = filteredWatched.slice(0, watchedPage * PAGE_SIZE);
   const hasMore     = paginated.length < filteredWatched.length;
@@ -273,6 +284,13 @@ function AppInner() {
                 <select value={filterDecade} onChange={e => setFilterDecade(e.target.value)}>
                   <option value="all">All</option>
                   {allDecades.map(d => <option key={d} value={d}>{d}s</option>)}
+                </select>
+              </div>
+              <div className="cf-sort">
+                <span>Genre</span>
+                <select value={filterGenre} onChange={e => setFilterGenre(e.target.value)}>
+                  <option value="all">All</option>
+                  {allGenres.map(g => <option key={g} value={g}>{g}</option>)}
                 </select>
               </div>
             </div>
