@@ -113,8 +113,7 @@ body.cine-host.dark { background:#14141a; }
 .cf { padding:18px 36px; display:flex; justify-content:space-between; align-items:center; gap:16px;
       flex-wrap:wrap; }
 .cf-left { display:flex; gap:8px; align-items:center; flex:1; min-width:0; flex-wrap:wrap; }
-.cf-chips { display:flex; gap:6px; overflow-x:auto; flex-wrap:nowrap; padding-bottom:4px; scrollbar-width:none; }
-.cf-chips::-webkit-scrollbar { display:none; }
+.cf-chips { display:flex; gap:6px; flex-wrap:wrap; }
 .cf-chip { font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.16em; text-transform:uppercase;
            padding:8px 14px; border:0; border-radius:6px; background:var(--surface); color:var(--ink-dim);
            cursor:pointer; box-shadow:var(--shadow-raised-sm); transition:all .15s; white-space:nowrap; }
@@ -264,7 +263,7 @@ body.cine-host.dark { background:#14141a; }
 .cm-actions { display:flex; gap:8px; flex-wrap:wrap; }
 .cm-btn { padding:13px 22px; border:0; border-radius:8px; background:var(--surface);
           box-shadow:var(--shadow-raised-sm); font-family:'Geist Mono',monospace; font-size:10px;
-          letter-spacing:0.18em; text-transform:uppercase; color:var(--ink-dim); cursor:pointer; transition:all .15s; }
+          letter-spacing:0.18em; text-transform:uppercase; color:var(--ink-dim); cursor:pointer; transition:all .08s; }
 .cm-btn:hover { color:var(--ink); box-shadow:var(--shadow-pressed-sm); background:color-mix(in oklch, var(--surface), white 6%); }
 .cine-root.light .cm-btn:hover { background:color-mix(in oklch, var(--surface), black 5%); }
 .cm-btn.primary { background:var(--accent); color:#1a1208;
@@ -273,6 +272,8 @@ body.cine-host.dark { background:#14141a; }
 .cm-btn.primary:hover { background:color-mix(in oklch, var(--accent), white 12%); color:#1a1208; box-shadow:-2px -2px 6px rgba(255,255,255,0.08),4px 4px 14px rgba(0,0,0,0.7); }
 .cm-btn.danger { color:#c84a4a; }
 .cm-btn.danger:hover { color:#e05a5a; background:rgba(200,60,60,0.1); box-shadow:var(--shadow-pressed-sm); }
+.cine-root.light .cm-btn.danger { color:#b83535; }
+.cine-root.light .cm-btn.danger:hover { color:#c84040; background:rgba(180,50,50,0.1); }
 
 /* Stats */
 .cs { padding:6px 36px 36px; display:grid; grid-template-columns:repeat(12,1fr); gap:14px; }
@@ -355,9 +356,10 @@ body.cine-host.dark { background:#14141a; }
 .sg-close { width:38px; height:38px; border-radius:8px; border:0; background:var(--surface);
             box-shadow:var(--shadow-raised-sm); cursor:pointer; color:var(--ink); font-size:18px; }
 .sg-body { padding:24px 32px 32px; overflow-y:auto; flex:1; min-height:0; }
-.sg-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:20px; max-width:760px; margin:0 auto; }
+.sg-grid { display:flex; flex-wrap:nowrap; justify-content:center; gap:14px; }
 .sg-card { background:var(--surface); border-radius:12px; padding:8px 8px 10px;
-           box-shadow:var(--shadow-raised); position:relative; transition:transform .2s; }
+           box-shadow:var(--shadow-raised); position:relative; transition:transform .2s;
+           width:160px; flex-shrink:0; }
 .sg-card:hover { transform:translateY(-3px); }
 .sg-card .pst { aspect-ratio:2/3; border-radius:6px; overflow:hidden;
                 box-shadow:inset 0 0 0 0.5px rgba(255,255,255,0.04),0 2px 6px rgba(0,0,0,0.5); }
@@ -514,7 +516,7 @@ body.cine-host.dark { background:#14141a; }
   .cine-root.page .ch-count { font-size:44px; }
   .cine-root.page .ct { padding:0 18px; gap:18px; overflow-x:auto; }
   .cine-root.page .cf { padding:14px 18px; flex-direction:column; align-items:stretch; }
-  .cine-root.page .cf-chips { overflow-x:auto; flex-wrap:nowrap; }
+  .cine-root.page .cf-chips { overflow-x:auto; }
   .cine-root.page .cr, .cine-root.page .cg-wrap, .cine-root.page .wl-wrap, .cine-root.page .rp { padding-left:18px; padding-right:18px; }
   .cine-root.page .cg.d-compact, .cine-root.page .cg.d-regular, .cine-root.page .cg.d-comfy { grid-template-columns:repeat(2,1fr) !important; gap:14px; }
   .cine-root.page .rp-panel { flex-direction:column; text-align:center; padding:24px; }
@@ -522,7 +524,7 @@ body.cine-host.dark { background:#14141a; }
   .cine-root.page .cm-title { font-size:32px; }
   .cine-root.page .cm-stats { grid-template-columns:repeat(2,1fr); }
   .cine-root.page .cs { grid-template-columns:1fr; padding:6px 18px 22px; }
-  .cine-root.page .sg-grid { grid-template-columns:repeat(2,1fr); gap:14px; }
+  .cine-root.page .sg-grid { flex-wrap:wrap; justify-content:center; gap:14px; }
   .cine-root.page .sc-frame { flex-direction:column; padding:22px; }
 }
 `;
@@ -722,10 +724,7 @@ function useStats(watchedFilms) {
   const ratedFilms     = watchedFilms.filter(f=>f.imdbRating);
   const avgRating      = ratedFilms.length?(ratedFilms.reduce((s,f)=>s+parseFloat(f.imdbRating),0)/ratedFilms.length).toFixed(1):"-";
   const bestPicCount   = watchedFilms.filter(f=>Number(f.awards)>=1).length;
-  const withRuntime    = watchedFilms.filter(f=>parseRuntime(f.runtime)>0);
-  const longestFilm    = withRuntime.length?withRuntime.reduce((a,b)=>parseRuntime(a.runtime)>parseRuntime(b.runtime)?a:b):null;
-  const shortestFilm   = withRuntime.length?withRuntime.reduce((a,b)=>parseRuntime(a.runtime)<parseRuntime(b.runtime)?a:b):null;
-  return {byDecade,byGenre,byDirector,byCountry,totalOscars,totalHours,avgRating,bestPicCount,longestFilm,shortestFilm};
+  return {byDecade,byGenre,byDirector,byCountry,totalOscars,totalHours,avgRating,bestPicCount};
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -881,7 +880,7 @@ function FilmCard({ film, onSelect, layout='classic' }) {
     <div className={`cc classic ${isOscar ? 'oscar' : ''}`} onClick={() => onSelect(film)}>
       <div className="cc-glow"/>
       {isOscar && <span className="cc-osc">{Ico.osc} ×{f.oscars}</span>}
-      {f.rewatched && <span className="cc-rew">↩ Rew</span>}
+      {f.rewatched && <span className="cc-rew">↺</span>}
       <div className="cc-poster"><PosterImg film={f}/></div>
       <div className="cc-meta">
         <h3 className="cc-title">{f.title}</h3>
@@ -1128,7 +1127,12 @@ function ShareCardModal({ film, onClose }) {
 
   useEffect(() => {
     (async () => {
-      await document.fonts.ready;
+      await Promise.allSettled([
+        document.fonts.load("700 68px 'Bricolage Grotesque'"),
+        document.fonts.load("400 34px 'Geist Mono'"),
+        document.fonts.load("700 44px 'Geist Mono'"),
+        document.fonts.load("400 26px 'Geist Mono'"),
+      ]);
       const canvas = canvasRef.current;
       const ctx = canvas.getContext("2d");
       const W = 1080, H = 1920;
@@ -1612,7 +1616,7 @@ function RandomPicker({ pool, onOpenFilm }) {
 
 // ─── Cinema Stats ─────────────────────────────────────────────────────────────
 function CinemaStats({ watchedFilms }) {
-  const { byDecade, byGenre, byDirector, byCountry, totalOscars, totalHours, avgRating, bestPicCount, longestFilm, shortestFilm } = useStats(watchedFilms);
+  const { byDecade, byGenre, byDirector, byCountry, totalOscars, totalHours, avgRating, bestPicCount } = useStats(watchedFilms);
   const BarChart = ({ rows, label }) => {
     const max = Math.max(...rows.map(r=>r[1]), 1);
     return (
@@ -1654,16 +1658,6 @@ function CinemaStats({ watchedFilms }) {
         <div style={{flex:1}}>
           <div className="l" style={{marginBottom:6}}>Across {bestPicCount} films</div>
         </div>
-      </div>
-      <div className="cs-card" style={{gridColumn:'span 3'}}>
-        <div className="l">Longest film</div>
-        <div style={{fontFamily:"'Bricolage Grotesque',sans-serif",fontVariationSettings:"'wdth' 85,'wght' 700",fontSize:20,lineHeight:1.2,marginTop:10,color:'var(--ink)',letterSpacing:'-0.02em'}}>{longestFilm?.title||'—'}</div>
-        <div className="vu">{longestFilm?.runtime||''}</div>
-      </div>
-      <div className="cs-card" style={{gridColumn:'span 3'}}>
-        <div className="l">Shortest film</div>
-        <div style={{fontFamily:"'Bricolage Grotesque',sans-serif",fontVariationSettings:"'wdth' 85,'wght' 700",fontSize:20,lineHeight:1.2,marginTop:10,color:'var(--ink)',letterSpacing:'-0.02em'}}>{shortestFilm?.title||'—'}</div>
-        <div className="vu">{shortestFilm?.runtime||''}</div>
       </div>
       <BarChart rows={byDecade} label="By decade"/>
       <BarChart rows={byGenre} label="By genre"/>
@@ -1748,7 +1742,6 @@ function AppInner() {
   const [search, setSearch] = useState('');
   const [filterDecade, setFilterDecade] = useState('all');
   const [sortBy, setSortBy] = useState('added');
-  const [sortDir, setSortDir] = useState('desc');
   const [viewMode, setViewMode] = useState('grid');
   const [page, setPage] = useState(1);
   const [selectedFilm, setSelectedFilm] = useState(null);
@@ -1762,7 +1755,7 @@ function AppInner() {
   const closeFilm = () => setSelectedFilm(null);
   useEffect(() => { if (!selectedFilm) window.scrollTo({ top: scrollRef.current, behavior: 'instant' }); }, [selectedFilm]);
 
-  useEffect(() => { setPage(1); }, [tab, search, filterDecade, sortBy, sortDir]);
+  useEffect(() => { setPage(1); }, [tab, search, filterDecade, sortBy]);
 
   const requireUnlock = (action) => { if (isUnlocked) action(); else { setPendingAction(()=>action); setShowPassword(true); } };
   const handleAddClick = () => requireUnlock(() => setShowAdd(true));
@@ -1806,20 +1799,14 @@ function AppInner() {
     return [...ds].sort((a,b) => b-a);
   }, [watchedFilms]);
 
-  const sortFilms = (arr, by, dir) => {
+  const sortFilms = (arr, by) => {
     const a = [...arr];
-    const flip = dir === 'asc' ? 1 : -1;
-    if (by === 'added') return a.sort((x,y) => flip * (new Date(x.created_at)-new Date(y.created_at)));
-    if (by === 'title') return a.sort((x,y) => flip * x.title.localeCompare(y.title));
-    if (by === 'year')  return a.sort((x,y) => flip * (parseInt(x.year)-parseInt(y.year)));
-    if (by === 'rating') return a.sort((x,y) => flip * (parseFloat(x.imdbRating||0)-parseFloat(y.imdbRating||0)));
-    if (by === 'oscars') return a.sort((x,y) => flip * (Number(x.awards)-Number(y.awards)));
+    if (by === 'added') return a.sort((x,y) => new Date(y.created_at)-new Date(x.created_at));
+    if (by === 'title') return a.sort((x,y) => x.title.localeCompare(y.title));
+    if (by === 'year')  return a.sort((x,y) => parseInt(y.year)-parseInt(x.year));
+    if (by === 'rating') return a.sort((x,y) => parseFloat(y.imdbRating||0)-parseFloat(x.imdbRating||0));
+    if (by === 'oscars') return a.sort((x,y) => Number(y.awards)-Number(x.awards));
     return a;
-  };
-  const sortDirLabel = () => {
-    if (sortBy === 'title') return sortDir === 'asc' ? 'A → Z' : 'Z → A';
-    if (sortBy === 'year') return sortDir === 'asc' ? 'Oldest first' : 'Newest first';
-    return sortDir === 'asc' ? 'Lowest first' : 'Highest first';
   };
 
   const filteredWatched = useMemo(() => {
@@ -1829,7 +1816,7 @@ function AppInner() {
       list = list.filter(f => [f.title,f.director,f.actors,f.country,f.genre].some(v=>v?.toLowerCase().includes(q)));
     }
     if (filterDecade !== 'all') list = list.filter(f => decadeOf(f.year) === filterDecade);
-    return sortFilms(list, sortBy, sortDir);
+    return sortFilms(list, sortBy);
   }, [watchedFilms, search, filterDecade, sortBy]);
 
   const paginated = filteredWatched.slice(0, page * PAGE_SIZE);
@@ -1878,7 +1865,7 @@ function AppInner() {
           </button>
         ))}
         {isUnlocked && (
-          <button className="cm-btn primary" style={{marginLeft:'auto', padding:'10px 20px'}} onClick={handleAddClick}>
+          <button className="cm-btn" style={{marginLeft:'auto', color:'var(--accent)'}} onClick={handleAddClick}>
             + Add film
           </button>
         )}
@@ -1894,17 +1881,18 @@ function AppInner() {
                 {Ico.search}
                 <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search films, directors…"/>
               </div>
-              <div className="cf-chips">
-                <button className={`cf-chip ${filterDecade==='all'?'on':''}`} onClick={()=>setFilterDecade('all')}>All decades</button>
-                {allDecades.map(d => (
-                  <button key={d} className={`cf-chip ${filterDecade===d?'on':''}`} onClick={()=>setFilterDecade(filterDecade===d?'all':d)}>{d}s</button>
-                ))}
+              <div className="cf-sort">
+                <span>Decade</span>
+                <select value={filterDecade} onChange={e=>setFilterDecade(e.target.value)}>
+                  <option value="all">All</option>
+                  {allDecades.map(d => <option key={d} value={d}>{d}s</option>)}
+                </select>
               </div>
             </div>
             <div className="cf-right">
               <div className="cf-sort">
                 <span>Sort by</span>
-                <select value={sortBy} onChange={e=>{setSortBy(e.target.value);setSortDir('desc');setPage(1);}}>
+                <select value={sortBy} onChange={e=>{setSortBy(e.target.value);setPage(1);}}>
                   <option value="added">Added</option>
                   <option value="title">Title</option>
                   <option value="year">Year</option>
@@ -1912,9 +1900,6 @@ function AppInner() {
                   <option value="oscars">Oscars</option>
                 </select>
               </div>
-              <button className="cf-chip" onClick={()=>setSortDir(d=>d==='asc'?'desc':'asc')} title="Toggle sort direction">
-                {sortDirLabel()}
-              </button>
               <span className="cf-count">{filteredWatched.length} film{filteredWatched.length!==1?'s':''}</span>
               <div className="cf-view">
                 <button className={viewMode==='grid'?'on':''} onClick={()=>setViewMode('grid')}>{Ico.grid}</button>
