@@ -289,9 +289,8 @@ body.cine-host.dark { background:#14141a; }
                     box-shadow:0 0 12px color-mix(in oklch, var(--accent), transparent 50%); }
 .cs-bar-row .num { font-family:'Geist Mono',monospace; font-size:10px; width:28px;
                    text-align:right; color:var(--ink-dim); }
-.cs-osc-card { display:flex; align-items:center; gap:18px; }
 .cs-osc-card .num-big { font-family:'Bricolage Grotesque',sans-serif; font-variation-settings:'wdth' 75,'wght' 800;
-                        font-size:72px; line-height:0.85; letter-spacing:-0.04em; color:var(--accent); }
+                        font-size:60px; line-height:0.9; margin-top:14px; letter-spacing:-0.04em; color:var(--accent); }
 
 /* Empty state */
 .ce { padding:60px 36px; display:flex; flex-direction:column; align-items:center;
