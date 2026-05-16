@@ -45,13 +45,9 @@ export function CinemaStats({ watchedFilms }) {
         <div className="vu">IMDb · curated taste</div>
       </div>
       <div className="cs-card cs-osc-card" style={{ gridColumn:'span 3' }}>
-        <div>
-          <div className="l">Oscars won</div>
-          <div className="num-big">{totalOscars}</div>
-        </div>
-        <div style={{ flex:1 }}>
-          <div className="l" style={{ marginBottom:6 }}>Across {bestPicCount} films</div>
-        </div>
+        <div className="l">Oscars won</div>
+        <div className="num-big">{totalOscars}</div>
+        <div className="vu">Across {bestPicCount} films</div>
       </div>
 
       <BarChart rows={byDecade}            label="By decade"/>
