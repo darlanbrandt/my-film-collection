@@ -81,6 +81,11 @@ export function AddModal({ onClose, onAdd, onUpdate, existingFilms, editFilm }) 
               {Ico.search}
               <input autoFocus value={query} onChange={e => setQuery(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && doSearch()} placeholder="Film title…"/>
+              {query && (
+                <button onClick={() => setQuery('')}
+                  style={{ background:'none', border:0, cursor:'pointer', color:'var(--ink-soft)',
+                    fontSize:16, lineHeight:1, padding:'0 2px', flexShrink:0 }}>×</button>
+              )}
               <input value={yearQuery} onChange={e => setYearQuery(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && doSearch()} placeholder="Year" style={{ width: 70 }}/>
               <input value={directorQuery} onChange={e => setDirectorQuery(e.target.value)}
