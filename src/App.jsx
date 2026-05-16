@@ -279,6 +279,11 @@ function AppInner() {
           <div className="cf-search">
             {Ico.search}
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search films, directors, actors…"/>
+            {search && (
+              <button onClick={() => setSearch('')}
+                style={{ background:'none', border:0, cursor:'pointer', color:'var(--ink-soft)',
+                  fontSize:16, lineHeight:1, padding:'0 2px', flexShrink:0 }}>×</button>
+            )}
           </div>
         </div>
         <div className="cf-row2">
