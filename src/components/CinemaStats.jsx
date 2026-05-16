@@ -2,7 +2,7 @@ import React from "react";
 import { useStats } from "../hooks/useStats.js";
 
 export function CinemaStats({ watchedFilms }) {
-  const { byDecade, byGenre, byDirector, byCountry,
+  const { byDecade, byGenre, byDirector, byCountry, byActor,
           totalOscars, totalHours, avgRating, bestPicCount } = useStats(watchedFilms);
 
   const BarChart = ({ rows, label }) => {
@@ -57,6 +57,7 @@ export function CinemaStats({ watchedFilms }) {
       <BarChart rows={byDecade}            label="By decade"/>
       <BarChart rows={byGenre}             label="By genre"/>
       <BarChart rows={byDirector.slice(0, 7)} label="Most-watched directors"/>
+      <BarChart rows={byActor.slice(0, 7)}    label="Most-watched actors"/>
 
       <div className="cs-card cs-chart" style={{ gridColumn:'span 12' }}>
         <h4>By country of origin</h4>
