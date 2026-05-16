@@ -273,58 +273,59 @@ function AppInner() {
         <>
           <RecentlyAdded films={recentlyAdded} onSelect={openFilm}/>
 
-          <div className="cf">
-            <div className="cf-left">
-              <div className="cf-search">
-                {Ico.search}
-                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search films, directors…"/>
-              </div>
-              <div className="cf-sort">
-                <span>Decade</span>
-                <select value={filterDecade} onChange={e => setFilterDecade(e.target.value)}>
-                  <option value="all">All</option>
-                  {allDecades.map(d => <option key={d} value={d}>{d}s</option>)}
-                </select>
-              </div>
-              <div className="cf-sort">
-                <span>Genre</span>
-                <select value={filterGenre} onChange={e => setFilterGenre(e.target.value)}>
-                  <option value="all">All</option>
-                  {allGenres.map(g => <option key={g} value={g}>{g}</option>)}
-                </select>
-              </div>
-            </div>
-            <div className="cf-right">
-              <div className="cf-sort">
-                <span>Sort by</span>
-                <select value={sortBy} onChange={e => { setSortBy(e.target.value); setSortDir('desc'); setWatchedPage(1); }}>
-                  <option value="added">Added</option>
-                  <option value="title">Title</option>
-                  <option value="year">Year</option>
-                  <option value="rating">Rating</option>
-                  <option value="oscars">Oscars</option>
-                </select>
-              </div>
-              <button className="cf-chip" onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
-                title="Toggle sort direction" style={{ fontSize:14, padding:'6px 10px' }}>
-                {sortDir === 'desc' ? '↓' : '↑'}
-              </button>
-              <span className="cf-count">{filteredWatched.length} film{filteredWatched.length !== 1 ? 's' : ''}</span>
-              <div className="cf-view">
-                <button className={viewMode === 'grid' ? 'on' : ''} onClick={() => setViewMode('grid')}>{Ico.grid}</button>
-                <button className={viewMode === 'list' ? 'on' : ''} onClick={() => setViewMode('list')}>{Ico.list}</button>
-                {viewMode === 'grid' && (
-                  <button
-                    className={gridDensity === 'comfy' ? 'on' : ''}
-                    onClick={() => setGridDensity(d => d === 'compact' ? 'comfy' : 'compact')}
-                    title={gridDensity === 'compact' ? 'Switch to 4 columns' : 'Switch to 6 columns'}
-                    style={{ minWidth:28 }}>
-                    {gridDensity === 'compact' ? '4' : '6'}
-                  </button>
-                )}
-              </div>
-            </div>
+      {/* ── Filter bar ── */}
+      <div className="cf">
+        <div className="cf-row1">
+          <div className="cf-search">
+            {Ico.search}
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search films, directors, actors…"/>
           </div>
+        </div>
+        <div className="cf-row2">
+          <div className="cf-sort">
+            <span>Decade</span>
+            <select value={filterDecade} onChange={e => setFilterDecade(e.target.value)}>
+              <option value="all">All</option>
+              {allDecades.map(d => <option key={d} value={d}>{d}s</option>)}
+            </select>
+          </div>
+          <div className="cf-sort">
+            <span>Genre</span>
+            <select value={filterGenre} onChange={e => setFilterGenre(e.target.value)}>
+              <option value="all">All</option>
+              {allGenres.map(g => <option key={g} value={g}>{g}</option>)}
+            </select>
+          </div>
+          <div className="cf-sort">
+            <span>Sort by</span>
+            <select value={sortBy} onChange={e => { setSortBy(e.target.value); setSortDir('desc'); setWatchedPage(1); }}>
+              <option value="added">Added</option>
+              <option value="title">Title</option>
+              <option value="year">Year</option>
+              <option value="rating">Rating</option>
+              <option value="oscars">Oscars</option>
+            </select>
+          </div>
+          <button className="cf-chip" onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+            title="Toggle sort direction" style={{ fontSize:14, padding:'6px 10px' }}>
+            {sortDir === 'desc' ? '↓' : '↑'}
+          </button>
+          <span className="cf-count">{filteredWatched.length} film{filteredWatched.length !== 1 ? 's' : ''}</span>
+          <div className="cf-view" style={{ marginLeft:'auto' }}>
+            <button className={viewMode === 'grid' ? 'on' : ''} onClick={() => setViewMode('grid')}>{Ico.grid}</button>
+            <button className={viewMode === 'list' ? 'on' : ''} onClick={() => setViewMode('list')}>{Ico.list}</button>
+            {viewMode === 'grid' && (
+              <button
+                className={gridDensity === 'comfy' ? 'on' : ''}
+                onClick={() => setGridDensity(d => d === 'compact' ? 'comfy' : 'compact')}
+                title={gridDensity === 'compact' ? 'Switch to 4 columns' : 'Switch to 6 columns'}
+                style={{ minWidth:28 }}>
+                {gridDensity === 'compact' ? '4' : '6'}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
 
           {filteredWatched.length === 0
             ? <EmptyState isWatchlist={false} onAdd={handleAddClick} isUnlocked={isUnlocked}/>
