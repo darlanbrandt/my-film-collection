@@ -19,6 +19,11 @@ export function useStats(watchedFilms) {
 
   const byDirector = toRows(tally(watchedFilms.map(f => f.director).filter(Boolean)));
   const byCountry  = toRows(tally(watchedFilms.map(f => f.country).filter(Boolean)));
+  const byActor    = toRows(tally(
+    watchedFilms.flatMap(f =>
+      (typeof f.actors === 'string' ? f.actors.split(',').map(a => a.trim()) : f.actors || []).filter(Boolean)
+    )
+  ));
 
   const totalOscars  = watchedFilms.reduce((s, f) => s + (Number(f.awards) || 0), 0);
   const totalRuntime = watchedFilms.reduce((s, f) => s + (parseInt(f.runtime) || 0), 0);
@@ -31,5 +36,5 @@ export function useStats(watchedFilms) {
 
   const bestPicCount = watchedFilms.filter(f => Number(f.awards) >= 1).length;
 
-  return { byDecade, byGenre, byDirector, byCountry, totalOscars, totalHours, avgRating, bestPicCount };
+  return { byDecade, byGenre, byDirector, byCountry, byActor, totalOscars, totalHours, avgRating, bestPicCount };
 }
