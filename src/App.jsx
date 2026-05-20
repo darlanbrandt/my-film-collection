@@ -63,12 +63,20 @@ function AppInner() {
   const [theme, setTheme] = useState(() => {
     try { return localStorage.getItem('mfc_cinema_theme') || 'light'; } catch { return 'light'; }
   });
+  const [design, setDesign] = useState(() => {
+    try { return localStorage.getItem('mfc_cinema_design') || 'neuro'; } catch { return 'neuro'; }
+  });
+  const [showSettings, setShowSettings] = useState(false);
   useEffect(() => {
     try { localStorage.setItem('mfc_cinema_theme', theme); } catch {}
     document.body.classList.add('cine-host');
     if (theme === 'dark') { document.body.classList.add('dark');  document.body.classList.remove('light'); }
     else                  { document.body.classList.add('light'); document.body.classList.remove('dark');  }
   }, [theme]);
+
+  useEffect(() => {
+    try { localStorage.setItem('mfc_cinema_design', design); } catch {}
+  }, [design]);
 
   // Data
   const { films, loading, addFilm, updateFilm, removeFilm, toggleRewatch } = useFilms();
@@ -233,7 +241,7 @@ function AppInner() {
   );
 
   return (
-    <div className={`cine-root page ${theme === 'light' ? 'light' : ''}`}
+    <div className={`cine-root page ${theme === 'light' ? 'light' : ''} ${design === 'glass' ? 'glass' : ''}`}
       style={{ '--cine-accent': '#d4a04a' }}>
 
       {/* ── Header ── */}
@@ -249,7 +257,34 @@ function AppInner() {
             : <div className="ch-pad"><div className="dot"/><span>Unlocked</span></div>
           }
           <button className="ch-btn" onClick={() => setShowImportExport(true)} title="Import / Export">{Ico.updown}</button>
-          <ThemeToggle value={theme} onChange={setTheme}/>
+          {/* Settings popover */}
+          <div className="settings-btn">
+            <button className="ch-btn" onClick={() => setShowSettings(s => !s)} title="Settings">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
+            </button>
+            {showSettings && (
+              <>
+                {/* Click-away overlay */}
+                <div style={{ position:'fixed', inset:0, zIndex:9998 }} onClick={() => setShowSettings(false)}/>
+                <div className="settings-popover">
+                  <div className="sp-row">
+                    <span className="sp-label">Theme</span>
+                    <ThemeToggle value={theme} onChange={setTheme}/>
+                  </div>
+                  <div className="sp-row">
+                    <span className="sp-label">Design</span>
+                    <div className="sp-pills">
+                      <button className={`sp-pill ${design === 'neuro' ? 'on' : ''}`} onClick={() => setDesign('neuro')}>Cinéma</button>
+                      <button className={`sp-pill ${design === 'glass' ? 'on' : ''}`} onClick={() => setDesign('glass')}>Glass</button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
