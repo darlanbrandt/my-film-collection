@@ -64,7 +64,7 @@
     
     /* Header */
     .ch { padding:24px 36px 8px; display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:28px;
-          border-bottom:1px solid var(--line); }
+          border-bottom:1px solid var(--line); position:relative; z-index:100; }
     .ch-count { font-family:'Bricolage Grotesque',sans-serif; font-variation-settings:'wdth' 75,'wght' 800;
                 font-size:78px; line-height:0.85; letter-spacing:-0.04em; color:var(--ink);
                 background:linear-gradient(180deg, var(--ink), color-mix(in oklch, var(--ink), black 18%));
@@ -543,13 +543,6 @@
     
     /* ─── Settings popover ───────────────────────────────────────────────────── */
     .settings-btn { position:relative; z-index:1000; }
-    .settings-popover {
-      position:absolute; bottom:calc(100% + 10px); right:0; z-index:9999;
-      background:var(--surface); border-radius:14px; padding:18px 20px;
-      box-shadow:var(--shadow-raised-lg, var(--shadow-raised));
-      border:1px solid var(--line); min-width:220px;
-      animation:cm-enter .2s cubic-bezier(.2,.7,.2,1) both;
-    }
     .settings-popover .sp-row { display:flex; align-items:center; justify-content:space-between;
                                  gap:16px; margin-bottom:14px; }
     .settings-popover .sp-row:last-child { margin-bottom:0; }
