@@ -542,9 +542,9 @@
     }
     
     /* ─── Settings popover ───────────────────────────────────────────────────── */
-    .settings-btn { position:relative; }
+    .settings-btn { position:relative; z-index:1000; }
     .settings-popover {
-      position:absolute; top:calc(100% + 10px); right:0; z-index:9999;
+      position:absolute; bottom:calc(100% + 10px); right:0; z-index:9999;
       background:var(--surface); border-radius:14px; padding:18px 20px;
       box-shadow:var(--shadow-raised-lg, var(--shadow-raised));
       border:1px solid var(--line); min-width:220px;
