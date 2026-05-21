@@ -20,7 +20,7 @@ import { tmdbFetch, fetchTmdbId }             from "./lib/tmdb.js";
 import { useFilms } from "./hooks/useFilms.js";
 
 // Components
-import { ThemeToggle }        from "./components/ThemeToggle.jsx";
+import { SettingsPopover }    from "./components/SettingsPopover.jsx";
 import { ToastHost }          from "./components/ToastHost.jsx";
 import { FilmCard,
          RecentlyAdded,
@@ -69,6 +69,29 @@ function AppInner() {
     if (theme === 'dark') { document.body.classList.add('dark');  document.body.classList.remove('light'); }
     else                  { document.body.classList.add('light'); document.body.classList.remove('dark');  }
   }, [theme]);
+
+  // Surface (design language): 'neumorphic' | 'glass' | 'liquid' | 'neon' | 'clay'
+  const [surface, setSurface] = useState(() => {
+    try { return localStorage.getItem('mfc_cinema_surface') || 'neumorphic'; } catch { return 'neumorphic'; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('mfc_cinema_surface', surface); } catch {}
+  }, [surface]);
+
+  // Settings popover
+  const [showSettings, setShowSettings] = useState(false);
+  const settingsBtnRef = useRef(null);
+
+  // Default accent per design language.
+  //   neumorphic + liquid → gold
+  //   glass               → blue
+  //   neon                → hot pink (Miami-vice magenta)
+  //   clay                → coral (warm + friendly, fits the puffy aesthetic)
+  const accentDefault =
+    surface === 'glass' ? '#3a7aaa' :
+    surface === 'neon'  ? '#ff2bd6' :
+    surface === 'clay'  ? '#ff7e5e' :
+                          '#d4a04a';
 
   // Data
   const { films, loading, addFilm, updateFilm, removeFilm, toggleRewatch } = useFilms();
@@ -233,8 +256,8 @@ function AppInner() {
   );
 
   return (
-    <div className={`cine-root page ${theme === 'light' ? 'light' : ''}`}
-      style={{ '--cine-accent': '#d4a04a' }}>
+    <div className={`cine-root page ${theme === 'light' ? 'light' : ''} ${surface === 'glass' ? 'glass' : ''} ${surface === 'liquid' ? 'liquid' : ''} ${surface === 'neon' ? 'neon' : ''} ${surface === 'clay' ? 'clay' : ''}`}
+      style={{ '--cine-accent': accentDefault }}>
 
       {/* ── Header ── */}
       <div className="ch">
@@ -249,7 +272,25 @@ function AppInner() {
             : <div className="ch-pad"><div className="dot"/><span>Unlocked</span></div>
           }
           <button className="ch-btn" onClick={() => setShowImportExport(true)} title="Import / Export">{Ico.updown}</button>
-          <ThemeToggle value={theme} onChange={setTheme}/>
+          <div style={{ position:'relative' }}>
+            <button
+              ref={settingsBtnRef}
+              className={`ch-btn ${showSettings ? 'on' : ''}`}
+              onClick={() => setShowSettings(s => !s)}
+              aria-expanded={showSettings}
+              title="Settings">
+              {Ico.gear}
+            </button>
+            <SettingsPopover
+              open={showSettings}
+              onClose={() => setShowSettings(false)}
+              theme={theme}
+              onThemeChange={setTheme}
+              surface={surface}
+              onSurfaceChange={setSurface}
+              anchorRef={settingsBtnRef}
+            />
+          </div>
         </div>
       </div>
 
