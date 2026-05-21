@@ -1961,3 +1961,25 @@
       position: fixed !important;
       z-index: 200;
     }
+    
+    /* ─── Rounded corner badge + pill fixes ──────────────────────────────────────
+    
+       1. Segmented controls (.sp-seg): add overflow:hidden so the selected pill
+          background is always clipped within the rounded container.
+    
+       2. Film card badges (.cc-osc / .cc-rew): nudge inward in modes with large
+          border-radius so the badge never lands inside the rounded corner zone.
+          Safe distance from corner = radius / √2, rounded up.
+            liquid: border-radius 22px → min inset ≈ 16px  (16×√2 = 22.6 > 22)
+            clay:   border-radius 26px → min inset ≈ 19px  (19×√2 = 26.9 > 26)   */
+    
+    /* 1 — Segmented control overflow */
+    .sp-seg { overflow: hidden; }
+    
+    /* 2 — Liquid card badges */
+    .cine-root.liquid .cc-osc { top:16px; right:16px; }
+    .cine-root.liquid .cc-rew { top:16px; left:16px;  }
+    
+    /* 2 — Clay card badges */
+    .cine-root.clay .cc-osc { top:19px; right:19px; }
+    .cine-root.clay .cc-rew { top:19px; left:19px;  }
