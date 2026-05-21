@@ -1936,3 +1936,28 @@
         inset 0 3px 4px -3px rgba(255,255,255,1),
         0 6px 14px -4px rgba(60,75,140,0.22);
     }
+    
+    /* ─── Modal overlay position fix ─────────────────────────────────────────────
+       The mesh-backdrop design modes set `position:relative; z-index:1` on all
+       direct children of .cine-root (to layer them above the ::before mesh).
+       That rule inadvertently overrides `position:fixed` on modal overlays.
+       Restore fixed positioning + correct z-index for every modal in every mode. */
+    .cine-root.glass .af,
+    .cine-root.glass .cm,
+    .cine-root.glass .sc,
+    .cine-root.glass .sg,
+    .cine-root.liquid .af,
+    .cine-root.liquid .cm,
+    .cine-root.liquid .sc,
+    .cine-root.liquid .sg,
+    .cine-root.neon .af,
+    .cine-root.neon .cm,
+    .cine-root.neon .sc,
+    .cine-root.neon .sg,
+    .cine-root.clay .af,
+    .cine-root.clay .cm,
+    .cine-root.clay .sc,
+    .cine-root.clay .sg {
+      position: fixed !important;
+      z-index: 200;
+    }
