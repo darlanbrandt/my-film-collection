@@ -463,7 +463,7 @@ function AppInner() {
           picks={suggestions.picks}
           existingFilms={films}
           onClose={() => setSuggestions(null)}
-          onAdd={addFilm}
+          onAdd={(film) => requireUnlock(() => addFilm(film))}
           showToast={(msg) => window.cinemaToast?.(msg)}
         />
       )}
