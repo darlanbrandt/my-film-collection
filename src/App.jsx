@@ -193,14 +193,15 @@ function AppInner() {
     if (tmdbId) fetchSuggestions(tmdbId, film.title);
   };
 
-  // Derived film lists
-  const watchedFilms   = films.filter(f => f.list !== 'watchlist');
-  const watchlistFilms = films.filter(f => f.list === 'watchlist');
+  // Derived film lists — memoized so a new array isn't allocated on every
+  // render (which would otherwise invalidate all the useMemo() filters below).
+  const watchedFilms   = useMemo(() => films.filter(f => f.list !== 'watchlist'), [films]);
+  const watchlistFilms = useMemo(() => films.filter(f => f.list === 'watchlist'), [films]);
 
-  const recentlyAdded = [...watchedFilms]
+  const recentlyAdded = useMemo(() => [...watchedFilms]
     .filter(f => !String(f.id).startsWith('temp_'))
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-    .slice(0, 4);
+    .slice(0, 4), [watchedFilms]);
 
   const allDecades = useMemo(() => {
     const ds = new Set(watchedFilms.map(f => decadeOf(f.year)).filter(d => d !== 'Unknown'));
