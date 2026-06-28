@@ -3,7 +3,7 @@ import { tmdbFetch, getDetails } from "../lib/tmdb.js";
 import { parseCSV, exportJSON, exportCSV } from "../lib/exportImport.js";
 import { Ico } from "./icons.jsx";
 
-export function ImportExportModal({ onClose, films, onImportFilm, isUnlocked }) {
+export function ImportExportModal({ onClose, films, onImportFilm, onExport, isUnlocked }) {
   const fileRef   = useRef(null);
   const cancelRef = useRef(false);
 
@@ -113,8 +113,8 @@ export function ImportExportModal({ onClose, films, onImportFilm, isUnlocked }) 
               Download a backup or open in Excel / Google Sheets.
             </p>
             <div className="io-row">
-              <button className="cm-btn" style={{ flex:1 }} onClick={() => exportJSON(films)}>⬇ JSON backup</button>
-              <button className="cm-btn" style={{ flex:1 }} onClick={() => exportCSV(films)}>⬇ CSV (Excel / Sheets)</button>
+              <button className="cm-btn" style={{ flex:1 }} onClick={() => onExport(exportJSON)}>⬇ JSON backup</button>
+              <button className="cm-btn" style={{ flex:1 }} onClick={() => onExport(exportCSV)}>⬇ CSV (Excel / Sheets)</button>
             </div>
             <div className="io-divider"/>
             <div className="io-section-title">Import films</div>
