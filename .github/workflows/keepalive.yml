@@ -1,0 +1,35 @@
+name: Supabase Keep-Alive
+
+# Supabase free-tier projects pause after a stretch of inactivity, and the first
+# request afterwards pays a slow "cold start" (the ~20s loading you sometimes
+# see). This workflow makes a tiny request on a schedule so the database stays
+# warm. It only reads a single id, so it's harmless and cheap.
+#
+# Setup (one time): add two repository secrets under
+#   Settings → Secrets and variables → Actions → New repository secret
+#     SUPABASE_URL       e.g. https://xxxxxxxx.supabase.co
+#     SUPABASE_ANON_KEY  the project's anon/public key (same one the app uses)
+
+on:
+  schedule:
+    # Every 30 minutes. GitHub may delay scheduled runs under load; that's fine
+    # for a keep-alive. Tighten (e.g. "*/5 * * * *") or widen as needed.
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {} # allows running it manually from the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST API
+        run: |
+          code=$(curl -sS -o /dev/null -w "%{http_code}" \
+            "${{ secrets.SUPABASE_URL }}/rest/v1/films?select=id&limit=1" \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}")
+          echo "Supabase responded with HTTP $code"
+          # 2xx = warm and reachable. Anything else fails the run so you notice.
+          case "$code" in
+            2*) exit 0 ;;
+            *)  echo "Unexpected status $code"; exit 1 ;;
+          esac
