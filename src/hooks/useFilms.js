@@ -1,33 +1,32 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "../lib/constants.js";
 import { rowToFilm, filmToRow } from "../lib/adapters.js";
 
 // Columns needed to render the card grid, filters, search, stats and dedup —
 // everything EXCEPT the heavy `plot` / `backdrop` text, which only the detail
 // modal and export need. Fetching the collection without them roughly halves
-// the initial payload; they're hydrated on demand (see hydrateFilm/hydrateAll).
+// the payload; they're hydrated on demand (see hydrateFilm / hydrateAll).
 const LIST_COLUMNS =
   "id,title,year,genre,director,country,actors,awards,imdb_rating,imdb_id,poster,runtime,rewatched,list,created_at";
 
-// Size of the first page fetched for an instant first paint.
-const FIRST_PAGE = 24;
+const CACHE_KEY      = "mfc_films_cache";    // the loaded films (watched, + watchlist once opened)
+const CACHE_WL_COUNT = "mfc_wl_count_cache"; // watchlist count, shown on the badge before the tab is opened
 
-// Stale-while-revalidate cache: the films list is the only thing gating the
-// initial loading screen, so persisting it locally lets repeat visits paint
-// instantly while we refresh from Supabase in the background. The heavy columns
-// are stripped so the cache stays small.
-const CACHE_KEY = "mfc_films_cache";
+// A film belongs to "watched" unless its list is explicitly 'watchlist'
+// (covers null / missing list values too).
+const isWatchlist = (f) => f.list === "watchlist";
+// Supabase filter for the same rule.
+const WATCHED_OR = "list.is.null,list.neq.watchlist";
 
-function readCache() {
+function readCache(key) {
   try {
-    const raw = localStorage.getItem(CACHE_KEY);
+    const raw = localStorage.getItem(key);
     if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : null;
+    return JSON.parse(raw);
   } catch { return null; }
 }
 
-function writeCache(films) {
+function writeFilmsCache(films) {
   try {
     const stable = films
       .filter(f => !String(f.id).startsWith("temp_"))
@@ -36,60 +35,96 @@ function writeCache(films) {
   } catch { /* quota / private mode — caching is best-effort */ }
 }
 
-export function useFilms() {
-  const cached = readCache();
-  const [films,   setFilms]   = useState(cached || []);
-  // Only show the blocking loading screen when we have nothing to render yet.
-  const [loading, setLoading] = useState(!cached);
+function writeNum(key, n) {
+  try { localStorage.setItem(key, String(n)); } catch {}
+}
 
+export function useFilms() {
+  const cachedFilms = readCache(CACHE_KEY);
+  const cachedArr   = Array.isArray(cachedFilms) ? cachedFilms : null;
+  // If the cache already holds watchlist rows, a previous session opened that
+  // tab — so we can show them immediately instead of waiting for a fetch.
+  const cachedHadWatchlist = !!cachedArr?.some(isWatchlist);
+  const cachedWlCount = (() => {
+    const n = Number(readCache(CACHE_WL_COUNT));
+    return Number.isFinite(n) ? n : 0;
+  })();
+
+  const [films,   setFilms]   = useState(cachedArr || []);
+  const [loading, setLoading] = useState(!cachedArr);
+
+  // Watchlist is loaded lazily, the first time its tab is opened.
+  const [watchlistLoaded,  setWatchlistLoaded]  = useState(cachedHadWatchlist);
+  const [watchlistLoading, setWatchlistLoading] = useState(false);
+  const [wlCount,          setWlCount]          = useState(
+    cachedHadWatchlist ? cachedArr.filter(isWatchlist).length : cachedWlCount
+  );
+
+  // Refs so loadWatchlist has a stable identity yet sees fresh flags.
+  const wlFetchedRef = useRef(false); // fetched from the server this session
+  const wlBusyRef    = useRef(false);
+
+  // ── Initial load: watched films + watchlist count ──────────────────────────
   useEffect(() => {
     let alive = true;
     (async () => {
       if (!supabase) { if (alive) setLoading(false); return; }
 
-      // Cache hit — already painted from localStorage. Just revalidate the full
-      // (light) collection in the background and reconcile.
-      if (cached) {
-        const { data, error } = await supabase
-          .from("films").select(LIST_COLUMNS).order("created_at", { ascending: false });
-        if (alive && !error && data) {
-          const mapped = data.map(rowToFilm);
-          setFilms(mapped);
-          writeCache(mapped);
-        }
-        return;
-      }
+      // Cheap count for the watchlist badge, so the header is correct before the
+      // watchlist tab is ever opened.
+      supabase
+        .from("films").select("*", { count: "exact", head: true }).eq("list", "watchlist")
+        .then(({ count }) => {
+          if (!alive || typeof count !== "number") return;
+          writeNum(CACHE_WL_COUNT, count);
+          if (!wlFetchedRef.current) setWlCount(count);
+        });
 
-      // Cold load — phase 1: first page only, for an instant first paint.
-      const first = await supabase
-        .from("films").select(LIST_COLUMNS).order("created_at", { ascending: false })
-        .range(0, FIRST_PAGE - 1);
-      if (!alive) return;
-      const firstFilms = !first.error && first.data ? first.data.map(rowToFilm) : [];
-      setFilms(firstFilms);
-      setLoading(false);
-
-      // Phase 2: stream the rest of the collection in the background so search,
-      // filters, stats and dedup operate over the full set.
-      const rest = await supabase
-        .from("films").select(LIST_COLUMNS).order("created_at", { ascending: false })
-        .range(FIRST_PAGE, 100000);
-      if (!alive) return;
-      if (!rest.error && rest.data && rest.data.length) {
+      // Watched films — the default view. Loaded fully so search, filters and
+      // stats are correct; watchlist rows already in memory are preserved.
+      const { data, error } = await supabase
+        .from("films").select(LIST_COLUMNS).or(WATCHED_OR)
+        .order("created_at", { ascending: false });
+      if (alive && !error && data) {
+        const watched = data.map(rowToFilm);
         setFilms(prev => {
-          const seen   = new Set(prev.map(f => f.id));
-          const merged = [...prev, ...rest.data.map(rowToFilm).filter(f => !seen.has(f.id))];
-          writeCache(merged);
+          const wl     = prev.filter(isWatchlist);
+          const merged = [...watched, ...wl];
+          writeFilmsCache(merged);
           return merged;
         });
-      } else {
-        writeCache(firstFilms);
       }
+      if (alive) setLoading(false);
     })();
     return () => { alive = false; };
   }, []);
 
-  // Lazy-load the heavy columns for a single film (on modal open / navigation).
+  // ── Lazy watchlist load (first time the tab is opened) ─────────────────────
+  const loadWatchlist = useCallback(async () => {
+    if (wlFetchedRef.current || wlBusyRef.current) return;
+    if (!supabase) { wlFetchedRef.current = true; setWatchlistLoaded(true); return; }
+    wlBusyRef.current = true;
+    setWatchlistLoading(true);
+    const { data, error } = await supabase
+      .from("films").select(LIST_COLUMNS).eq("list", "watchlist")
+      .order("created_at", { ascending: false });
+    if (!error && data) {
+      const wl = data.map(rowToFilm);
+      setFilms(prev => {
+        const watched = prev.filter(f => !isWatchlist(f));
+        const merged  = [...watched, ...wl];
+        writeFilmsCache(merged);
+        return merged;
+      });
+      setWlCount(wl.length);
+      wlFetchedRef.current = true;
+      setWatchlistLoaded(true);
+    }
+    wlBusyRef.current = false;
+    setWatchlistLoading(false);
+  }, []);
+
+  // ── On-demand hydration of the heavy columns ───────────────────────────────
   const hydrateFilm = async (id) => {
     if (!supabase || String(id).startsWith("temp_")) return null;
     const { data, error } = await supabase
@@ -100,9 +135,8 @@ export function useFilms() {
     return data;
   };
 
-  // Fetch the full rows (incl. heavy columns) for every film — used at export
-  // time, where the complete dataset is genuinely required. Returns the merged
-  // list so the caller can export the freshest data without a state round-trip.
+  // Full rows (incl. heavy columns) for export. Returns the merged list so the
+  // caller can export the freshest data without a state round-trip.
   const hydrateAll = async () => {
     if (!supabase) return films;
     const { data, error } = await supabase
@@ -110,18 +144,24 @@ export function useFilms() {
     if (error || !data) return films;
     const full = data.map(rowToFilm);
     setFilms(full);
-    writeCache(full);
+    writeFilmsCache(full);
+    wlFetchedRef.current = true;
+    setWatchlistLoaded(true);
+    setWlCount(full.filter(isWatchlist).length);
     return full;
   };
 
+  // ── Mutations ──────────────────────────────────────────────────────────────
   const addFilm = async (film) => {
     const tempId     = `temp_${Date.now()}`;
     const optimistic = { ...film, id: tempId, awards: Number(film.awards) || 0, created_at: new Date().toISOString() };
     setFilms(prev => [optimistic, ...prev]);
+    // Keep the badge correct when adding to a watchlist that isn't loaded yet.
+    if (isWatchlist(optimistic) && !wlFetchedRef.current) setWlCount(c => c + 1);
     if (supabase) {
       const { data, error } = await supabase.from("films").insert(filmToRow(film)).select().single();
-      if (!error && data) setFilms(prev => { const next = prev.map(f => f.id === tempId ? rowToFilm(data) : f); writeCache(next); return next; });
-      else setFilms(prev => prev.filter(f => f.id !== tempId));
+      if (!error && data) setFilms(prev => { const next = prev.map(f => f.id === tempId ? rowToFilm(data) : f); writeFilmsCache(next); return next; });
+      else { setFilms(prev => prev.filter(f => f.id !== tempId)); if (isWatchlist(optimistic) && !wlFetchedRef.current) setWlCount(c => Math.max(0, c - 1)); }
     }
   };
 
@@ -132,12 +172,18 @@ export function useFilms() {
     Object.entries(map).forEach(([k, v]) => { if (updates[k] !== undefined) row[v] = updates[k]; });
     if (updates.awards !== undefined) row.awards = Number(updates.awards) || 0;
     if (supabase) await supabase.from("films").update(row).eq("id", id);
-    setFilms(prev => { const next = prev.map(f => f.id === id ? { ...f, ...updates } : f); writeCache(next); return next; });
+    setFilms(prev => { const next = prev.map(f => f.id === id ? { ...f, ...updates } : f); writeFilmsCache(next); return next; });
   };
 
   const removeFilm = async (id) => {
     if (supabase) await supabase.from("films").delete().eq("id", id);
-    setFilms(prev => { const next = prev.filter(f => f.id !== id); writeCache(next); return next; });
+    setFilms(prev => {
+      const gone = prev.find(f => f.id === id);
+      if (gone && isWatchlist(gone) && !wlFetchedRef.current) setWlCount(c => Math.max(0, c - 1));
+      const next = prev.filter(f => f.id !== id);
+      writeFilmsCache(next);
+      return next;
+    });
   };
 
   const toggleRewatch = async (id) => {
@@ -146,5 +192,10 @@ export function useFilms() {
     await updateFilm(id, { rewatched: !film.rewatched });
   };
 
-  return { films, loading, addFilm, updateFilm, removeFilm, toggleRewatch, hydrateFilm, hydrateAll };
+  return {
+    films, loading,
+    watchlistLoaded, watchlistLoading, wlCount, loadWatchlist,
+    addFilm, updateFilm, removeFilm, toggleRewatch,
+    hydrateFilm, hydrateAll,
+  };
 }

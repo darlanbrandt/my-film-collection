@@ -94,7 +94,8 @@ function AppInner() {
                           '#d4a04a';
 
   // Data
-  const { films, loading, addFilm, updateFilm, removeFilm, toggleRewatch, hydrateFilm, hydrateAll } = useFilms();
+  const { films, loading, watchlistLoaded, watchlistLoading, wlCount, loadWatchlist,
+          addFilm, updateFilm, removeFilm, toggleRewatch, hydrateFilm, hydrateAll } = useFilms();
 
   // UI state
   const [tab,             setTab]             = useState('watched');
@@ -214,6 +215,12 @@ function AppInner() {
   // render (which would otherwise invalidate all the useMemo() filters below).
   const watchedFilms   = useMemo(() => films.filter(f => f.list !== 'watchlist'), [films]);
   const watchlistFilms = useMemo(() => films.filter(f => f.list === 'watchlist'), [films]);
+  // Watchlist count comes from a cheap count query until the tab is opened and
+  // its films are actually loaded.
+  const watchlistCount = watchlistLoaded ? watchlistFilms.length : wlCount;
+
+  // Lazy-load the watchlist the first time its tab is opened.
+  useEffect(() => { if (tab === 'watchlist') loadWatchlist(); }, [tab, loadWatchlist]);
 
   const recentlyAdded = useMemo(() => [...watchedFilms]
     .filter(f => !String(f.id).startsWith('temp_'))
@@ -282,7 +289,7 @@ function AppInner() {
         <div className="ch-count">{watchedFilms.length}</div>
         <div className="ch-mid">
           <h1>My Film Collection</h1>
-          <div className="sub">{watchedFilms.length} watched · {watchlistFilms.length} on watchlist</div>
+          <div className="sub">{watchedFilms.length} watched · {watchlistCount} on watchlist</div>
         </div>
         <div className="ch-tools">
           {!isUnlocked
@@ -314,7 +321,7 @@ function AppInner() {
 
       {/* ── Tabs ── */}
       <div className="ct">
-        {[['watched','Watched',watchedFilms.length],['watchlist','Watchlist',watchlistFilms.length],['stats','Stats',0]].map(([id, label, count]) => (
+        {[['watched','Watched',watchedFilms.length],['watchlist','Watchlist',watchlistCount],['stats','Stats',0]].map(([id, label, count]) => (
           <button key={id} className={`ct-tab ${tab === id ? 'on' : ''}`} onClick={() => setTab(id)}>
             {label}
             {count > 0 && <span className="num">{count}</span>}
@@ -409,7 +416,13 @@ function AppInner() {
 
       {/* ── Watchlist tab ── */}
       {tab === 'watchlist' && (
-        watchlistFilms.length === 0
+        watchlistLoading && watchlistFilms.length === 0
+          ? <div style={{ display:'flex', alignItems:'center', justifyContent:'center', padding:'4rem 0',
+              fontFamily:"'Geist Mono',monospace", fontSize:10, color:'var(--ink-soft)',
+              letterSpacing:'0.3em', textTransform:'uppercase' }}>
+              Loading watchlist…
+            </div>
+          : watchlistFilms.length === 0
           ? <EmptyState isWatchlist={true} onAdd={handleAddClick} isUnlocked={isUnlocked}/>
           : (
             <>
