@@ -12,9 +12,9 @@ name: Supabase Keep-Alive
 
 on:
   schedule:
-    # Every 5 minutes. GitHub may delay scheduled runs under load; that's fine
-    # for a keep-alive. Widen this (e.g. "*/30 * * * *") if you want fewer runs.
-    - cron: "*/5 * * * *"
+    # Every 30 minutes. GitHub may delay scheduled runs under load; that's fine
+    # for a keep-alive. Tighten (e.g. "*/5 * * * *") or widen as needed.
+    - cron: "*/30 * * * *"
   workflow_dispatch: {} # allows running it manually from the Actions tab
 
 jobs:
