@@ -68,6 +68,10 @@ function AppInner() {
     document.body.classList.add('cine-host');
     if (theme === 'dark') { document.body.classList.add('dark');  document.body.classList.remove('light'); }
     else                  { document.body.classList.add('light'); document.body.classList.remove('dark');  }
+    // Keep the PWA / mobile status-bar colour in sync with the chosen theme.
+    document.querySelectorAll('meta[name="theme-color"]').forEach(m => {
+      m.setAttribute('content', theme === 'dark' ? '#14141a' : '#ece4d2');
+    });
   }, [theme]);
 
   // Surface (design language): 'neumorphic' | 'glass' | 'liquid' | 'neon' | 'clay'
