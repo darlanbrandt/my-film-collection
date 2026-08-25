@@ -334,6 +334,7 @@ function AppInner() {
               surface={surface}
               onSurfaceChange={setSurface}
               anchorRef={settingsBtnRef}
+              onImportExport={isMobile ? () => setShowImportExport(true) : undefined}
             />
           </div>
         </div>

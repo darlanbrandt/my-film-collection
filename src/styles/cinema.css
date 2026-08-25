@@ -628,6 +628,12 @@
     .sp-seg-opt:hover { color:var(--ink); }
     .sp-seg-opt.on { color:var(--accent); background: var(--surface-up);
                      box-shadow: 0 2px 6px rgba(0,0,0,0.18); }
+    .sp-action { width:100%; border:0; cursor:pointer; padding:11px 12px; border-radius:8px;
+                 background:var(--surface-up); color:var(--ink-dim);
+                 font-family:'Geist Mono',monospace; font-size:9.5px; letter-spacing:0.14em;
+                 text-transform:uppercase; display:flex; align-items:center; gap:8px;
+                 transition: color .15s; }
+    .sp-action:hover { color:var(--ink); }
     .sp-portal.sp-s-liquid .sp-seg-opt.on { background: rgba(255,255,255,0.18);
                                              box-shadow: 0 2px 8px rgba(0,0,0,0.25),
                                                          inset 0 1px 0 rgba(255,255,255,0.4); }

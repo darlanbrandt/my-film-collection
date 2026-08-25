@@ -116,6 +116,16 @@
     box-shadow: var(--shadow-pressed-sm); display: flex; align-items: center; justify-content: center; color: var(--accent-deep);
   }
 
+  /* ── Compact random picker (mobile "tonight" card) ── */
+  .cine-root.mobile .rp { padding: 0 18px 16px; }
+  .cine-root.mobile .rp-panel { flex-direction: row; text-align: left; padding: 16px; gap: 16px; align-items: stretch; }
+  .cine-root.mobile .rp-reel { width: 96px; height: 144px; flex: 0 0 96px; }
+  .cine-root.mobile .rp-info { display: flex; flex-direction: column; }
+  .cine-root.mobile .rp-info h2 { font-size: 22px; line-height: 1.06; margin: 4px 0 0; }
+  .cine-root.mobile .rp-info p { display: none; }
+  .cine-root.mobile .rp-info .verdict { margin: 8px 0 0; }
+  .cine-root.mobile .rp-info .actions { margin-top: auto; padding-top: 12px; }
+
   /* ── Bottom navigation capsule ── */
   .cine-root.mobile .mnav {
     position: fixed; left: 18px; right: 18px; bottom: calc(22px + env(safe-area-inset-bottom));
