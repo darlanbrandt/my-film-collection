@@ -4,7 +4,7 @@ import { TMDB_IMG } from "../lib/constants.js";
 import { FilmPoster } from "./FilmPoster.jsx";
 import { Ico } from "./icons.jsx";
 
-export function AddModal({ onClose, onAdd, onUpdate, existingFilms, editFilm }) {
+export function AddModal({ onClose, onAdd, onUpdate, existingFilms, editFilm, isMobile }) {
   const isEdit = !!editFilm;
   const [query,         setQuery]         = useState('');
   const [yearQuery,     setYearQuery]     = useState('');
@@ -97,10 +97,24 @@ export function AddModal({ onClose, onAdd, onUpdate, existingFilms, editFilm }) 
             </div>
             {status && <div className="af-step">{status}</div>}
             {err    && <div className="af-error">{err}</div>}
-            <label className="af-wl-label">
-              <input type="checkbox" checked={addToWl} onChange={e => setAddToWl(e.target.checked)}/>
-              Add to watchlist instead of watched
-            </label>
+            {isMobile ? (
+              <div className="af-addto">
+                <div className="af-addto-label">Add to</div>
+                <div className="af-seg">
+                  <button className={!addToWl ? 'on' : ''} onClick={() => setAddToWl(false)}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12l5 5 9-11"/></svg>Watched
+                  </button>
+                  <button className={addToWl ? 'on' : ''} onClick={() => setAddToWl(true)}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"><path d="M6 3h12v18l-6-4-6 4V3z"/></svg>Watchlist
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <label className="af-wl-label">
+                <input type="checkbox" checked={addToWl} onChange={e => setAddToWl(e.target.checked)}/>
+                Add to watchlist instead of watched
+              </label>
+            )}
           </>
         )}
 

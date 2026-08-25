@@ -10,6 +10,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
 
 // Styles
 import "./styles/cinema.css";
+import "./styles/mobile.css";
 
 // Lib
 import { APP_PASSWORD, PAGE_SIZE, TMDB_IMG } from "./lib/constants.js";
@@ -18,6 +19,7 @@ import { tmdbFetch, fetchTmdbId }             from "./lib/tmdb.js";
 
 // Hooks
 import { useFilms } from "./hooks/useFilms.js";
+import { useIsMobile } from "./hooks/useIsMobile.js";
 
 // Components
 import { SettingsPopover }    from "./components/SettingsPopover.jsx";
@@ -33,6 +35,8 @@ import { ShareCardModal }     from "./components/ShareCardModal.jsx";
 import { ImportExportModal }  from "./components/ImportExportModal.jsx";
 import { RandomPicker }       from "./components/RandomPicker.jsx";
 import { CinemaStats }        from "./components/CinemaStats.jsx";
+import { MobileNav }          from "./components/MobileNav.jsx";
+import { FilterSheet }        from "./components/FilterSheet.jsx";
 import { Ico }                from "./components/icons.jsx";
 
 // ─── Error Boundary ───────────────────────────────────────────────────────────
@@ -101,6 +105,10 @@ function AppInner() {
   const { films, loading, watchlistLoaded, watchlistLoading, wlCount, loadWatchlist,
           addFilm, updateFilm, removeFilm, toggleRewatch, hydrateFilm, hydrateAll } = useFilms();
 
+  // Mobile layout (phone-sized viewport) swaps in the bottom nav + sheets.
+  const isMobile = useIsMobile();
+  const [showFilters, setShowFilters] = useState(false);
+
   // UI state
   const [tab,             setTab]             = useState('watched');
   const [showAdd,         setShowAdd]         = useState(false);
@@ -116,11 +124,13 @@ function AppInner() {
   // Auth
   const [isUnlocked, setIsUnlocked] = useState(() => {
     if (!APP_PASSWORD) return true;
-    try { return sessionStorage.getItem('mfc_unlocked') === '1'; } catch { return false; }
+    try { return localStorage.getItem('mfc_unlocked') === '1' || sessionStorage.getItem('mfc_unlocked') === '1'; } catch { return false; }
   });
-  const unlock = () => {
+  // `persist` keeps the unlock across sessions (the "stay unlocked" toggle);
+  // otherwise it lasts only for the current tab session.
+  const unlock = (persist) => {
     setIsUnlocked(true);
-    try { sessionStorage.setItem('mfc_unlocked', '1'); } catch {}
+    try { (persist ? localStorage : sessionStorage).setItem('mfc_unlocked', '1'); } catch {}
   };
 
   // Filters / sort
@@ -285,7 +295,7 @@ function AppInner() {
   );
 
   return (
-    <div className={`cine-root page ${theme === 'light' ? 'light' : ''} ${surface === 'glass' ? 'glass' : ''} ${surface === 'liquid' ? 'liquid' : ''} ${surface === 'neon' ? 'neon' : ''} ${surface === 'clay' ? 'clay' : ''}`}
+    <div className={`cine-root page ${isMobile ? 'mobile' : ''} ${theme === 'light' ? 'light' : ''} ${surface === 'glass' ? 'glass' : ''} ${surface === 'liquid' ? 'liquid' : ''} ${surface === 'neon' ? 'neon' : ''} ${surface === 'clay' ? 'clay' : ''}`}
       style={{ '--cine-accent': accentDefault }}>
 
       {/* ── Header ── */}
@@ -293,18 +303,24 @@ function AppInner() {
         <div className="ch-count">{watchedFilms.length}</div>
         <div className="ch-mid">
           <h1>My Film Collection</h1>
-          <div className="sub">{watchedFilms.length} watched · {watchlistCount} on watchlist</div>
+          <div className="sub">
+            {isMobile
+              ? `${watchlistCount} queued`
+              : `${watchedFilms.length} watched · ${watchlistCount} on watchlist`}
+          </div>
         </div>
         <div className="ch-tools">
           {!isUnlocked
-            ? <button className="ch-btn" onClick={() => setShowPassword(true)} title="Unlock">{Ico.lock}</button>
+            ? <button className="ch-btn lockpill" onClick={() => setShowPassword(true)} title="Unlock">{Ico.lock}{isMobile && <span>Locked</span>}</button>
             : <div className="ch-pad"><div className="dot"/><span>Unlocked</span></div>
           }
-          <button className="ch-btn" onClick={() => setShowImportExport(true)} title="Import / Export">{Ico.updown}</button>
+          {!isMobile && (
+            <button className="ch-btn" onClick={() => setShowImportExport(true)} title="Import / Export">{Ico.updown}</button>
+          )}
           <div style={{ position:'relative' }}>
             <button
               ref={settingsBtnRef}
-              className={`ch-btn ${showSettings ? 'on' : ''}`}
+              className={`ch-btn gear ${showSettings ? 'on' : ''}`}
               onClick={() => setShowSettings(s => !s)}
               aria-expanded={showSettings}
               title="Settings">
@@ -318,6 +334,7 @@ function AppInner() {
               surface={surface}
               onSurfaceChange={setSurface}
               anchorRef={settingsBtnRef}
+              onImportExport={isMobile ? () => setShowImportExport(true) : undefined}
             />
           </div>
         </div>
@@ -342,6 +359,35 @@ function AppInner() {
       {tab === 'watched' && (
         <>
           <RecentlyAdded films={recentlyAdded} onSelect={openFilm}/>
+
+      {/* ── Mobile filter bar ── */}
+      {isMobile && (
+        <>
+          <div className="mfilter">
+            <div className="mfilter-search">
+              {Ico.search}
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search films, directors…"/>
+              {search && (
+                <button onClick={() => setSearch('')}
+                  style={{ background:'none', border:0, cursor:'pointer', color:'var(--ink-soft)', fontSize:16, lineHeight:1, padding:'0 2px' }}>×</button>
+              )}
+            </div>
+            <button className="mfilter-btn" onClick={() => setShowFilters(true)}>
+              Filter{((filterDecade !== 'all' ? 1 : 0) + (filterGenre !== 'all' ? 1 : 0)) > 0 &&
+                <span className="badge">{(filterDecade !== 'all' ? 1 : 0) + (filterGenre !== 'all' ? 1 : 0)}</span>}
+            </button>
+          </div>
+          <div className="mmeta">
+            <span>
+              {filteredWatched.length} film{filteredWatched.length !== 1 ? 's' : ''}
+              {filterDecade !== 'all' ? ` · ${filterDecade}s` : ''}{filterGenre !== 'all' ? ` · ${filterGenre}` : ''}
+            </span>
+            <button className="sort" onClick={() => setShowFilters(true)}>
+              {({ added:'Added', title:'Title', year:'Year', rating:'Rating', oscars:'Oscars' }[sortBy])} {sortDir === 'desc' ? '↓' : '↑'}
+            </button>
+          </div>
+        </>
+      )}
 
       {/* ── Filter bar ── */}
       <div className="cf">
@@ -428,7 +474,16 @@ function AppInner() {
             </div>
           : watchlistFilms.length === 0
           ? <EmptyState isWatchlist={true} onAdd={handleAddClick} isUnlocked={isUnlocked}/>
-          : (
+          : isMobile ? (
+            <>
+              <RandomPicker pool={watchlistFilms} onOpenFilm={openFilm}/>
+              <div className="mmeta"><span>Queued</span><span className="sort">{watchlistFilms.length} films</span></div>
+              <div className="mqueue">
+                {paginatedWl.map(f => <FilmCard key={f.id} film={f} onSelect={openFilm} layout="row"/>)}
+              </div>
+              {wlHasMore && <div ref={wlSentinel} style={{ height:1 }}/>}
+            </>
+          ) : (
             <>
               <RandomPicker pool={watchlistFilms} onOpenFilm={openFilm}/>
               <div className="wl-wrap">
@@ -470,6 +525,7 @@ function AppInner() {
           onRemove={removeFilm}
           isWatchlist={selectedFilm.list === 'watchlist'}
           isUnlocked={isUnlocked}
+          isMobile={isMobile}
         />
       )}
 
@@ -477,18 +533,48 @@ function AppInner() {
 
       {showPassword && (
         <PasswordModal
-          onSuccess={() => { unlock(); if (pendingAction) { pendingAction(); setPendingAction(null); } }}
+          isMobile={isMobile}
+          onSuccess={(persist) => { unlock(persist); if (pendingAction) { pendingAction(); setPendingAction(null); } }}
           onClose={() => { setShowPassword(false); setPendingAction(null); }}
         />
       )}
 
       {(showAdd || editFilm) && (
         <AddModal
+          isMobile={isMobile}
           onClose={() => { setShowAdd(false); setEditFilm(null); }}
           onAdd={handleAdd}
           onUpdate={updateFilm}
           existingFilms={films}
           editFilm={editFilm}
+        />
+      )}
+
+      {/* ── Mobile bottom navigation + filter sheet ── */}
+      {isMobile && (
+        <MobileNav
+          tab={tab}
+          onTab={setTab}
+          isUnlocked={isUnlocked}
+          onAdd={handleAddClick}
+          onUnlock={() => setShowPassword(true)}
+        />
+      )}
+      {isMobile && showFilters && (
+        <FilterSheet
+          decades={allDecades}
+          genres={allGenres}
+          filterDecade={filterDecade}
+          filterGenre={filterGenre}
+          sortBy={sortBy}
+          sortDir={sortDir}
+          resultCount={filteredWatched.length}
+          onDecade={setFilterDecade}
+          onGenre={setFilterGenre}
+          onSortBy={setSortBy}
+          onSortDir={setSortDir}
+          onReset={() => { setFilterDecade('all'); setFilterGenre('all'); }}
+          onClose={() => setShowFilters(false)}
         />
       )}
 

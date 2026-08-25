@@ -7,6 +7,22 @@ export function FilmCard({ film, onSelect, layout = 'classic' }) {
   const f       = adaptFilm(film);
   const isOscar = f.oscars > 0;
 
+  // Compact queue row used in the mobile watchlist.
+  if (layout === 'row') {
+    return (
+      <button className="mqueue-row" onClick={() => onSelect(film)}>
+        <div className="thumb"><PosterImg film={f}/></div>
+        <div className="info">
+          <div className="t">{f.title}</div>
+          <div className="s">{f.year}{f.director ? ` · ${f.director}` : ''}</div>
+        </div>
+        <span className="mqueue-check">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12l5 5 9-11"/></svg>
+        </span>
+      </button>
+    );
+  }
+
   if (layout === 'list') {
     return (
       <div className={`cc list-row ${isOscar ? 'oscar' : ''}`} onClick={() => onSelect(film)}>

@@ -23,6 +23,7 @@ export function SettingsPopover({
   anchorRef,
   theme, onThemeChange,
   surface, onSurfaceChange,
+  onImportExport,
 }) {
   const [pos, setPos] = useState({ top: 60, right: 36 });
   const popRef = useRef(null);
@@ -103,6 +104,17 @@ export function SettingsPopover({
             ))}
           </div>
         </div>
+
+        {/* Import / Export lives here on mobile, where the header has no room. */}
+        {onImportExport && (
+          <div className="sp-row">
+            <div className="sp-label">Data</div>
+            <button className="sp-action" onClick={() => { onClose(); onImportExport(); }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12M8 11l4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+              Import / Export
+            </button>
+          </div>
+        )}
       </div>
     </div>,
     document.body
