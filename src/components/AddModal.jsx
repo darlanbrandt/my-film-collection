@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { searchFilms, getDetails } from "../lib/tmdb.js";
 import { TMDB_IMG } from "../lib/constants.js";
 import { FilmPoster } from "./FilmPoster.jsx";
@@ -22,6 +22,25 @@ export function AddModal({ onClose, onAdd, onUpdate, existingFilms, editFilm, is
   } : { title:'', year:'', genre:'', director:'', country:'', actors:'', awards:'', imdbRating:'', imdbId:'', poster:'', backdrop:'', plot:'', runtime:'' });
   const [err, setErr] = useState('');
 
+  // Mobile shows TMDB matches inline as you type — debounce the search so the
+  // results appear on the same screen (no separate "confirm" step).
+  useEffect(() => {
+    if (!isMobile || isEdit) return;
+    const q = query.trim();
+    if (q.length < 2) { setCandidates([]); return; }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      setLoading(true); setErr('');
+      try {
+        const results = await searchFilms(
+          q.slice(0, 100), yearQuery.trim().slice(0, 4).replace(/\D/g, ''), directorQuery.trim().slice(0, 100), setStatus);
+        if (!cancelled) setCandidates(results);
+      } catch (e) { if (!cancelled) setErr(`Search error: ${e.message}`); }
+      if (!cancelled) { setStatus(''); setLoading(false); }
+    }, 450);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [isMobile, isEdit, query, yearQuery, directorQuery]);
+
   const doSearch = async () => {
     const q = query.trim().slice(0, 100);
     const y = yearQuery.trim().slice(0, 4).replace(/\D/g, '');
@@ -34,7 +53,7 @@ export function AddModal({ onClose, onAdd, onUpdate, existingFilms, editFilm, is
         setErr("No results. Try a different title or fill in manually.");
         setForm(f => ({ ...f, title: query, year: yearQuery, director: directorQuery }));
         setStep('edit');
-      } else { setCandidates(results); setStep('confirm'); }
+      } else { setCandidates(results); if (!isMobile) setStep('confirm'); }
     } catch (e) { setErr(`Search error: ${e.message}`); }
     setStatus(''); setLoading(false);
   };
@@ -49,6 +68,20 @@ export function AddModal({ onClose, onAdd, onUpdate, existingFilms, editFilm, is
       setStep('edit');
     }
     setStatus(''); setLoading(false);
+  };
+
+  // Mobile "+" — fetch full details and add straight to the collection.
+  const quickAdd = async (c) => {
+    setLoading(true); setErr(''); setStatus('Adding…');
+    try {
+      const details = await getDetails(c, directorQuery.trim());
+      const dup = existingFilms.find(f =>
+        (details.imdbId && f.imdbId && details.imdbId === f.imdbId) ||
+        (f.title.trim().toLowerCase() === details.title.trim().toLowerCase() && String(f.year) === String(details.year)));
+      if (dup) { setErr(`"${dup.title}" (${dup.year}) is already in your collection.`); setLoading(false); setStatus(''); return; }
+      onAdd({ ...details, awards: Number(details.awards) || 0, rewatched: false, list: addToWl ? 'watchlist' : 'watched' });
+      onClose();
+    } catch (e) { setErr(`Could not add: ${e.message}`); setLoading(false); setStatus(''); }
   };
 
   const handleSave = () => {
@@ -67,15 +100,124 @@ export function AddModal({ onClose, onAdd, onUpdate, existingFilms, editFilm, is
     onClose();
   };
 
+  // Poster thumbnail for a TMDB search result.
+  const resultThumb = (c) => c.poster_path
+    ? <img src={`https://image.tmdb.org/t/p/w92${c.poster_path}`} alt=""
+        style={{ width:'100%', height:'100%', objectFit:'cover' }} onError={e => e.target.style.display = 'none'}/>
+    : <FilmPoster film={{ title:c.title, year:c.year, poster:{ layout:'minimal', colors:['#14141a','#d4a04a','#ecead8'] }, director:'' }}/>;
+
+  const addToControl = (
+    <div className="af-addto">
+      <div className="af-addto-label">Add to</div>
+      <div className="af-seg">
+        <button className={!addToWl ? 'on' : ''} onClick={() => setAddToWl(false)}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12l5 5 9-11"/></svg>Watched
+        </button>
+        <button className={addToWl ? 'on' : ''} onClick={() => setAddToWl(true)}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"><path d="M6 3h12v18l-6-4-6 4V3z"/></svg>Watchlist
+        </button>
+      </div>
+    </div>
+  );
+
+  const editStep = (
+    <>
+      <div className="af-step">{isEdit ? 'Update any field and save.' : 'Review all fields before saving.'}</div>
+      {err && <div className="af-error">{err}</div>}
+      <div className="af-form-scroll">
+        {form.poster && (
+          <div style={{ textAlign:'center', marginBottom:14 }}>
+            <img src={form.poster} alt="poster" style={{ height:140, borderRadius:6, objectFit:'cover' }}
+              onError={e => e.target.style.display = 'none'}/>
+          </div>
+        )}
+        <div className="af-grid2">
+          {[['Title','title'],['Year','year'],['Genre','genre'],['Director','director'],['Country','country'],['Oscars won','awards']].map(([label, k]) => (
+            <div key={k} className="af-field">
+              <label>{label}</label>
+              <input type={k === 'awards' ? 'number' : 'text'} value={form[k]}
+                onChange={e => setForm(f => ({ ...f, [k]: e.target.value }))}/>
+            </div>
+          ))}
+        </div>
+        <div className="af-field">
+          <label>Main cast (comma-separated)</label>
+          <input value={form.actors} onChange={e => setForm(f => ({ ...f, actors: e.target.value }))}/>
+        </div>
+        <div className="af-field">
+          <label>Poster URL</label>
+          <input value={form.poster} onChange={e => setForm(f => ({ ...f, poster: e.target.value }))}/>
+        </div>
+        <div className="af-field">
+          <label>Plot</label>
+          <textarea value={form.plot} onChange={e => setForm(f => ({ ...f, plot: e.target.value }))}/>
+        </div>
+        {form.imdbRating && <div className="af-step">IMDb: ★ {form.imdbRating}/10</div>}
+      </div>
+      <div className="af-footer">
+        {!isEdit && !isMobile && <button className="cm-btn" onClick={() => setStep('confirm')}>Back</button>}
+        {!isEdit && isMobile && <button className="cm-btn" onClick={() => setStep('search')}>Back</button>}
+        <button className="cm-btn primary" onClick={handleSave} style={{ flex: 2 }}>
+          {isEdit ? 'Save changes' : 'Add to collection'}
+        </button>
+      </div>
+    </>
+  );
+
+  // ── Mobile search + inline results ─────────────────────────────────────────
+  const mobileSearch = (
+    <>
+      <div className="af-msearch">
+        <div className="af-mfield">
+          {Ico.search}
+          <input autoFocus value={query} onChange={e => setQuery(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && doSearch()} placeholder="Film title…"/>
+          {query && <button className="clear" onClick={() => setQuery('')}>×</button>}
+        </div>
+        <div className="af-mrow">
+          <input className="af-myear" value={yearQuery} onChange={e => setYearQuery(e.target.value)} placeholder="Year"/>
+          <input className="af-mdir" value={directorQuery} onChange={e => setDirectorQuery(e.target.value)} placeholder="Director (optional)"/>
+        </div>
+      </div>
+      {addToControl}
+      {err && <div className="af-error">{err}</div>}
+      {loading && <div className="af-mmatches">{status || 'Searching…'}</div>}
+      {!loading && candidates.length > 0 && <div className="af-mmatches">{candidates.length} matches from TMDB</div>}
+      <div className="af-mscroll">
+        {candidates.map((c, i) => (
+          <div key={i} className="af-mresult">
+            <div className="thumb">{resultThumb(c)}</div>
+            <div className="info">
+              <div className="t">{c.title}</div>
+              <div className="s">{c.year}{c.original_title && c.original_title !== c.title ? ` · ${c.original_title}` : ''}</div>
+              {c.overview && <p>{c.overview}</p>}
+            </div>
+            <button className="add" onClick={() => !loading && quickAdd(c)} disabled={loading} aria-label="Add">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+          </div>
+        ))}
+        <button className="af-mmanual"
+          onClick={() => { setForm(f => ({ ...f, title: query, year: yearQuery, director: directorQuery })); setStep('edit'); }}>
+          Enter details manually →
+        </button>
+      </div>
+    </>
+  );
+
   return (
     <div className="af" onClick={onClose}>
       <div className="af-frame" onClick={e => e.stopPropagation()}>
         <div className="af-hd">
-          <h3>{isEdit ? `Edit — ${editFilm.title}` : step === 'search' ? 'Add a film' : step === 'confirm' ? 'Select the correct film' : 'Review details'}</h3>
+          <h3>{isEdit ? `Edit — ${editFilm.title}` : step === 'edit' ? 'Review details' : step === 'confirm' ? 'Select the correct film' : 'Add a film'}</h3>
           <button className="sg-close" onClick={onClose}>×</button>
         </div>
 
-        {step === 'search' && (
+        {step === 'edit' && editStep}
+
+        {step !== 'edit' && isMobile && mobileSearch}
+
+        {step === 'search' && !isMobile && (
           <>
             <div className="af-search">
               {Ico.search}
@@ -97,42 +239,20 @@ export function AddModal({ onClose, onAdd, onUpdate, existingFilms, editFilm, is
             </div>
             {status && <div className="af-step">{status}</div>}
             {err    && <div className="af-error">{err}</div>}
-            {isMobile ? (
-              <div className="af-addto">
-                <div className="af-addto-label">Add to</div>
-                <div className="af-seg">
-                  <button className={!addToWl ? 'on' : ''} onClick={() => setAddToWl(false)}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12l5 5 9-11"/></svg>Watched
-                  </button>
-                  <button className={addToWl ? 'on' : ''} onClick={() => setAddToWl(true)}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"><path d="M6 3h12v18l-6-4-6 4V3z"/></svg>Watchlist
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <label className="af-wl-label">
-                <input type="checkbox" checked={addToWl} onChange={e => setAddToWl(e.target.checked)}/>
-                Add to watchlist instead of watched
-              </label>
-            )}
+            <label className="af-wl-label">
+              <input type="checkbox" checked={addToWl} onChange={e => setAddToWl(e.target.checked)}/>
+              Add to watchlist instead of watched
+            </label>
           </>
         )}
 
-        {step === 'confirm' && (
+        {step === 'confirm' && !isMobile && (
           <>
             <div className="af-step">Select the correct film</div>
             <div className="af-list">
               {candidates.map((c, i) => (
                 <button key={i} className="af-row" onClick={() => !loading && selectCandidate(c)} disabled={loading}>
-                  <div className="thumb">
-                    {c.poster_path
-                      ? <img src={`https://image.tmdb.org/t/p/w92${c.poster_path}`} alt=""
-                          style={{ width:'100%', height:'100%', objectFit:'cover' }}
-                          onError={e => e.target.style.display = 'none'}/>
-                      : <FilmPoster film={{ title:c.title, year:c.year,
-                          poster:{ layout:'minimal', colors:['#14141a','#d4a04a','#ecead8'] }, director:'' }}/>
-                    }
-                  </div>
+                  <div className="thumb">{resultThumb(c)}</div>
                   <div className="info">
                     <b>{c.title} <span style={{ fontWeight:400, color:'var(--ink-dim)' }}>({c.year})</span></b>
                     {c.original_title && c.original_title !== c.title && <div className="meta">{c.original_title}</div>}
@@ -145,49 +265,6 @@ export function AddModal({ onClose, onAdd, onUpdate, existingFilms, editFilm, is
             <div className="af-footer">
               <button className="cm-btn" onClick={() => { setStep('search'); setCandidates([]); }}>Back</button>
               <button className="cm-btn" onClick={() => { setForm(f => ({ ...f, title:query, year:yearQuery, director:directorQuery })); setStep('edit'); }}>Fill manually</button>
-            </div>
-          </>
-        )}
-
-        {step === 'edit' && (
-          <>
-            <div className="af-step">{isEdit ? 'Update any field and save.' : 'Review all fields before saving.'}</div>
-            {err && <div className="af-error">{err}</div>}
-            <div className="af-form-scroll">
-              {form.poster && (
-                <div style={{ textAlign:'center', marginBottom:14 }}>
-                  <img src={form.poster} alt="poster" style={{ height:140, borderRadius:6, objectFit:'cover' }}
-                    onError={e => e.target.style.display = 'none'}/>
-                </div>
-              )}
-              <div className="af-grid2">
-                {[['Title','title'],['Year','year'],['Genre','genre'],['Director','director'],['Country','country'],['Oscars won','awards']].map(([label, k]) => (
-                  <div key={k} className="af-field">
-                    <label>{label}</label>
-                    <input type={k === 'awards' ? 'number' : 'text'} value={form[k]}
-                      onChange={e => setForm(f => ({ ...f, [k]: e.target.value }))}/>
-                  </div>
-                ))}
-              </div>
-              <div className="af-field">
-                <label>Main cast (comma-separated)</label>
-                <input value={form.actors} onChange={e => setForm(f => ({ ...f, actors: e.target.value }))}/>
-              </div>
-              <div className="af-field">
-                <label>Poster URL</label>
-                <input value={form.poster} onChange={e => setForm(f => ({ ...f, poster: e.target.value }))}/>
-              </div>
-              <div className="af-field">
-                <label>Plot</label>
-                <textarea value={form.plot} onChange={e => setForm(f => ({ ...f, plot: e.target.value }))}/>
-              </div>
-              {form.imdbRating && <div className="af-step">IMDb: ★ {form.imdbRating}/10</div>}
-            </div>
-            <div className="af-footer">
-              {!isEdit && <button className="cm-btn" onClick={() => setStep('confirm')}>Back</button>}
-              <button className="cm-btn primary" onClick={handleSave} style={{ flex: 2 }}>
-                {isEdit ? 'Save changes' : 'Add to collection'}
-              </button>
             </div>
           </>
         )}
